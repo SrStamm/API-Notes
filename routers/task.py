@@ -17,12 +17,13 @@ def tasks_all():
         return results
 
 # Lee la tarea de id especifico
-@router.get("/{id}")
+@router.get("/{id}", status_code=status.HTTP_202_ACCEPTED)
 def tasks_search_id(id: int):
     with Session(engine) as session:
         statement = select(Tasks).where(Tasks.id == id)
         results = session.exec(statement).first()
         return results
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se encontro la nota"})
 
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -49,29 +50,18 @@ def update_task(task: Tasks):
         session.commit()
         
         return {"Ha sido actualizado con exito"}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se pudo actualizar la nota"})
 
 
 
 
 
 # Elimina la tarea con id especifico
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(id:int):
-    found = False
-    for index, task in enumerate(task_list):
-        if task.id == id:
-            del task_list[index]
-            found = True
-    
-    if not found:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error":"No se ha encontrado la tarea"})
-    
-    return {"La tarea se ha eliminado"}
-
-# Funcion de busqueda
-def search_task(id: int):
-    task_searched = filter(lambda task: task.id == id, task_list)
-    try:    
-        return list(task_searched)[0]
-    except:
-        return {"error":"No se ha encontrado el usuario"}
+@router.delete("/d/{id_}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(id_ : int):
+    busqueda = Tasks(id=id_, text=".")
+    with Session(engine) as session:
+        statement = select(Tasks).where(Tasks.id == busqueda.id)
+        results = session.exec(statement).first()
+        print(busqueda)
+        return busqueda
