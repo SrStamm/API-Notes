@@ -1,28 +1,28 @@
 from fastapi import APIRouter, status, HTTPException
-from Models.Task import Task, Task_bd
-from DB.database import Session, engine, Base, select
+from Models.Task import Task
+from Models.db_models import Tasks
+from DB.database import Session, engine, select
 
 # Base.metadata.create_all(bind=engine)
 
 # Router de la app
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-# Lista de las notas
-task_list = [
-        Task(id=1, texto="Esto es una nota"),
-        Task(id=2, texto="Comprar: Pan, Leche, Huevos"),
-        Task(id=3, texto="Despues del colegio, ir a la casa de la abueal")
-]
-
 # Lee todas las tareas
 @router.get("/")
 def tasks_all():
-    return task_list
+    with Session(engine) as session:
+        statement = select(Tasks)
+        results = session.exec(statement).all()
+        return results
 
 # Lee la tarea de id especifico
 @router.get("/{id}")
 def tasks_search_id(id: int):
-    return search_task(id)
+    with Session(engine) as session:
+        statement = select(Tasks).where(Tasks.id == id)
+        results = session.exec(statement)
+        return results
 
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -42,7 +42,7 @@ def create_task(task : Task):
 @router.post("/bd", status_code=status.HTTP_201_CREATED)
 def create_task(task : Task):
     db = Session()
-    new_task = Task_bd(**Task.dict())
+    new_task = Tasks(**Task.dict())
     db.add(new_task)
     db.commit()
     return Task.dict()
