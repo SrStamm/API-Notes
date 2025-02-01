@@ -1,5 +1,4 @@
 from fastapi import APIRouter, status, HTTPException
-from Models.Task import Task
 from Models.db_models import Tasks
 from DB.database import Session, engine, select
 

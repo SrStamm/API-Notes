@@ -1,55 +1,61 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from Models.User import User, User_BD
+from Models.db_models import Users
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from DB.database import Session, engine, select
 
+# Router
 router = APIRouter(prefix="/users", tags=["Users"])
 
 oauth2 = OAuth2PasswordBearer(tokenUrl="login")
 
-# Lista de usuarios
-users_list = [
-    User_BD(id=1, username="Mirko", email="mirko@dev.com", disabled=False, password="123456"),
-    User_BD(id=2, username="Moure", email="moure@dev.com", disabled=False, password="159753"),
-    User_BD(id=3, username="Dalto", email="dalto@dev.com", disabled=False, password="123789")
-]
-
-
-# Lista de usuarios
-users_db = {
-    "mirko_dev" : {"id":1, "username":"mirko_dev", "email":"mirko@dev.com", "disabled": False, "password":"$2a$12$3X0URv8RM5NvN4pdw58QlO.77VDfbSXRTzTMY98T6U4oLFYSD3AjW"},
-    "moure_dev" : {"id":2, "username":"moure_dev", "email":"moure@dev.com", "disabled": True, "password":"$2a$12$xlWIfXHnxGy87Mr1oNH2r.vYr6K.3JDXpqSXz9RjVQfU4ZQ6Gj5Bm"}
-}
 
 # Lee todas las tareas
 @router.get("/")
 def get_users_all():
-    return users_list
+    with Session(engine) as session:
+        statement = select(Users)
+        results = session.exec(statement).all()
+        return results
 
 # Lee la tarea de id especifico
 @router.get("/{id}")
 def get_users_with_id(id: int):
-    return search_user_by_id(id)
+    with Session(engine) as session:
+        statement = select(Users).where(Users.id == id)
+        results = session.exec(statement).first()
+        return results
 
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_user(user : User):
-    # Verificamos que no exista una tarea con el mismo id
-    for index, user_search in enumerate(users_list):
-        if user_search.id == user.id:
-            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail={"Ya existe un usuario con este id"})
-    
-    users_list.append(user)
-    return {"Se creo un nuevo usuario."}
+def create_user(new_user : Users):
+    new_user = Users(new_user)
+    with Session(engine) as session:
+        statement = select(Users)
+        results = session.exec(statement).all()
+
+        for result in results:
+            if new_user.id == result.id:
+                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail={"Ya existe un usuario con este id"})
+        
+        session.add(new_user)
+        session.commit()
+        session.refresh(new_user)
+    return {"Se creo un nuevo usuario.", new_user }
 
 # Actualiza un usuario segun su ID
 @router.put("/{id}", status_code=status.HTTP_202_ACCEPTED)
-def update_task(user: User):
+def update_task(user_: Users):
+
     found = False   # Indica si se encontro el usuario
 
-    for index, user_search in enumerate(users_list):
-        if user_search.id == user.id:
-            users_list[index] = user
-            found = True
+    with Session(engine) as session:
+        statement = select(Users).where(Users.id == user_.id)
+        user_found = session.exec(statement).first()
+
+        user_found = user_
+
+        session.commit()
     
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se ha encontrado el usuario"})

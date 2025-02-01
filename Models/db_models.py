@@ -5,7 +5,7 @@ class Users(SQLModel, table=True):
     username : str
     email : str
     age : int
-    disabled : bool = Field(default=False)
+    disabled : bool 
     password : str
 
 class Tasks(SQLModel, table=True):
