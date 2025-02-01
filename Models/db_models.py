@@ -1,11 +1,10 @@
 from sqlmodel import Field, SQLModel
 
 class Users(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    user_id: int | None = Field(default=None, primary_key=True)
     username : str
     email : str
-    age : int
-    disabled : bool 
+    disabled : bool = Field(default=False)
     password : str
 
 class Tasks(SQLModel, table=True):

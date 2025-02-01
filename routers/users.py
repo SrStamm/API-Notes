@@ -27,45 +27,34 @@ def get_users_with_id(id: int):
         return results
 
 # Crea una nueva tarea
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_202_ACCEPTED)
 def create_user(new_user : Users):
-    new_user = Users(new_user)
     with Session(engine) as session:
         statement = select(Users)
         results = session.exec(statement).all()
-
-        for result in results:
-            if new_user.id == result.id:
-                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail={"Ya existe un usuario con este id"})
         
+        for i in results:
+            if i.email == new_user.email:
+                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail={"Ya existe un usuario con este id"})
+
         session.add(new_user)
         session.commit()
-        session.refresh(new_user)
-    return {"Se creo un nuevo usuario.", new_user }
+    return {"Se creo un nuevo usuario."}
 
 # Actualiza un usuario segun su ID
 @router.put("/{id}", status_code=status.HTTP_202_ACCEPTED)
-def update_task(user_: Users):
-
-    found = False   # Indica si se encontro el usuario
-
+def update_user(user_: Users):
     with Session(engine) as session:
         statement = select(Users).where(Users.id == user_.id)
         user_found = session.exec(statement).first()
-
         user_found = user_
-
-        session.commit()
-    
-    if not found:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se ha encontrado el usuario"})
-    else: 
-        return {"El usuario fue actualizado"}
+        session.commit()    
+    return {"El usuario fue actualizado"}
 
 
 # Elimina la tarea con id especifico
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(id:int):
+def delete_user(id:int):
     found = False
     for index, user in enumerate(users_list):
         if user.id == id:
@@ -76,17 +65,4 @@ def delete_task(id:int):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error":"No se ha encontrado el usuario"})
     
     return {"La tarea se ha eliminado"}
-
-# Funcion de busqueda por id
-def search_user_by_id(id: int):
-    user_searched = filter(lambda user: user.id == id, users_list)
-    try:    
-        return list(user_searched)[0]
-    except:
-        return {"error":"No se ha encontrado el usuario"}
-    
-# Funcion de busqueda por username
-def search_user_by_username(username:str):
-    if username in users_list:
-        return User(users_list[username])
     
