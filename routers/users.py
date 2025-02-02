@@ -1,5 +1,4 @@
-from fastapi import APIRouter, status, HTTPException, Depends
-from Models.User import User, User_BD
+from fastapi import APIRouter, status, HTTPException
 from Models.db_models import Users
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from DB.database import Session, engine, select
@@ -22,7 +21,7 @@ def get_users_all():
 @router.get("/{id}")
 def get_users_with_id(id: int):
     with Session(engine) as session:
-        statement = select(Users).where(Users.id == id)
+        statement = select(Users).where(Users.user_id == id)
         results = session.exec(statement).first()
         return results
 
@@ -45,7 +44,7 @@ def create_user(new_user : Users):
 @router.put("/{id}", status_code=status.HTTP_202_ACCEPTED)
 def update_user(user_: Users):
     with Session(engine) as session:
-        statement = select(Users).where(Users.id == user_.id)
+        statement = select(Users).where(Users.user_id == user_.id)
         user_found = session.exec(statement).first()
         user_found = user_
         session.commit()    
@@ -53,16 +52,13 @@ def update_user(user_: Users):
 
 
 # Elimina la tarea con id especifico
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(id:int):
-    found = False
-    for index, user in enumerate(users_list):
-        if user.id == id:
-            del users_list[index]
-            found = True
+@router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(id_ : int):
+    with Session(engine) as session:
+        statement = select(Users).where(Users.user_id == id_)
+        resultado = session.exec(statement).first()
     
-    if not found:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error":"No se ha encontrado el usuario"})
-    
-    return {"La tarea se ha eliminado"}
-    
+        session.delete(resultado)
+
+        session.commit()
+    return {"El usuario se ha eliminado con éxito"}

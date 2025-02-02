@@ -56,11 +56,14 @@ def update_task(task: Tasks):
 
 
 # Elimina la tarea con id especifico
-@router.delete("/d/{id_}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(id_ : int):
-    busqueda = Tasks(id=id_, text=".")
     with Session(engine) as session:
-        statement = select(Tasks).where(Tasks.id == busqueda.id)
+        # Busqueda del task con el mismo id
+        statement = select(Tasks).where(Tasks.id == id_)
         results = session.exec(statement).first()
-        print(busqueda)
-        return busqueda
+        
+        # Elimina y guarda lo eliminado
+        session.delete(results)
+        session.commit()
+        return {"Se ha eliminado exitosamente"}
