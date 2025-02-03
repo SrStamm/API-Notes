@@ -40,8 +40,10 @@ def create_user(new_user : Users):
                 raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
                                      detail={"error" : "Ya existe un usuario con este email"})
         else:
-            new_user.password = encrypt_password(new_user.password)
             session.add(new_user)
+            session.commit()
+            session.refresh(new_user)
+            new_user.password = encrypt_password(new_user.password)
             session.commit()
             return {"Se creo un nuevo usuario."}
 

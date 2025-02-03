@@ -19,4 +19,3 @@ app.include_router(auth.router)
 @app.get("/")
 def root():
     return {"Bienvenido! Mira todas las tareas pendientes."}
-    
