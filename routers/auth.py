@@ -26,7 +26,7 @@ oauth2 = OAuth2PasswordBearer(tokenUrl="login")
 # Funcion que encripta la contraseña
 def encrypt_password(password : str):
     password = password.encode()
-    bash_password = crypt.hash(password, scheme=["bcrypt"])
+    bash_password = crypt.hash(secret=password, scheme="bcrypt")    
     return bash_password
 
 # Proceso de validacion de Token encriptado
