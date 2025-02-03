@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from Models.db_models import Users, UserRead
 from DB.database import Session, engine, select
 
-router = APIRouter(tags=["Authentication"])
+router = APIRouter(prefix="/login", tags=["Authentication"])
 
 # Definimos el algoritmo
 ALGORITHM = "HS256"
@@ -26,7 +26,7 @@ oauth2 = OAuth2PasswordBearer(tokenUrl="login")
 # Funcion que encripta la contraseña
 def encrypt_password(password : str):
     password = password.encode()
-    bash_password = crypt.hash(secret=password, scheme="bcrypt")    
+    bash_password = crypt.hash(secret=password)    
     return bash_password
 
 # Proceso de validacion de Token encriptado
@@ -52,7 +52,7 @@ async def auth_user(token: str = Depends(oauth2)):
         return user_found
 
 
-@router.post("/login")
+@router.post("/")
 async def login(form: OAuth2PasswordRequestForm = Depends()):
 
     # Obtiene el usuario con el mismo username
@@ -78,9 +78,19 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
         # Devuelve el token de acceso
         return {"access_token" : jwt.encode(access_token, SECRET, algorithm=ALGORITHM), "token_type" : "bearer"}
 
+# Valida si el user esta acivo
+async def current_user(user: Users = Depends(auth_user)):
+    if user.disabled == True:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Usuario inactivo")
+      
+    return user
+
 # Lee los datos del usuario
-@router.get("/login/me", response_model=UserRead)
-async def user_me(user: Users = Depends(auth_user)):
+@router.get("/me", response_model=UserRead)
+async def user_me(user: Users = Depends(current_user)):
+    user = auth_user()
     with Session(engine) as session:
         statement = select(Users).where(Users.username == user.username)
         user_found = session.exec(statement)
