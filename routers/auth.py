@@ -4,6 +4,7 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from Models.User import User, User_BD
+from Models.db_models import User
 
 router = APIRouter(tags=["Authentication"])
 

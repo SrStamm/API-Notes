@@ -14,3 +14,6 @@ class UserRead(SQLModel):
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str
+
+class TaskRead(SQLModel):
+    text : str

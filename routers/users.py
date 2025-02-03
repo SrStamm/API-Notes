@@ -11,7 +11,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 def get_users_all():
     with Session(engine) as session:
         statement = select(Users)
-        results = session.exec(statement)
+        results = session.exec(statement).all()
         return results
 
 # Lee el usuario de id especifico

@@ -1,8 +1,6 @@
 from fastapi import APIRouter, status, HTTPException
-from Models.db_models import Tasks
+from Models.db_models import Tasks, TaskRead
 from DB.database import Session, engine, select
-
-# Base.metadata.create_all(bind=engine)
 
 # Router de la app
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -17,7 +15,7 @@ def tasks_all():
 
 
 # Lee la tarea de id especifico
-@router.get("/{id}", status_code=status.HTTP_202_ACCEPTED)
+@router.get("/{id}", status_code=status.HTTP_202_ACCEPTED, response_model=TaskRead)
 def tasks_search_id(id: int):
     with Session(engine) as session:
         statement = select(Tasks).where(Tasks.id == id)
@@ -41,19 +39,14 @@ def update_task(task: Tasks):
     with Session(engine) as session:
         statement = select(Tasks).where(Tasks.id == task.id)
         result = session.exec(statement)
-        
-        # Obtiene un unico valor
-        task_selected = result.one()
+    
+        task_selected = result.one()        # Obtiene un unico valor
         
         if task_selected is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error":"No se ha encontrado la nota"})
         else:
-            # Se modifica el registro
-            task_selected.text = task.text
-            
-            # Se guardan los cambios
-            session.commit()
-            
+            task_selected.text = task.text      # Se modifica el registro
+            session.commit()                    # Se guardan los cambios
             return {"detail" : "Ha sido actualizado con exito"}
 
 
@@ -61,11 +54,12 @@ def update_task(task: Tasks):
 @router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(id_ : int):
     with Session(engine) as session:
-        # Busqueda del task con el mismo id
         statement = select(Tasks).where(Tasks.id == id_)
         results = session.exec(statement).first()
-        
-        # Elimina y guarda lo eliminado
-        session.delete(results)
-        session.commit()
-        return {"Se ha eliminado exitosamente"}
+
+        if results is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error":"No se ha encontrado la nota"})
+        else:
+            session.delete(results)
+            session.commit()
+            return {"Se ha eliminado exitosamente"}
