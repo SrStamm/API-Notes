@@ -23,7 +23,11 @@ def get_users_with_id(id: int):
     with Session(engine) as session:
         statement = select(Users).where(Users.user_id == id)
         results = session.exec(statement).first()
-        return results
+
+        if results is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
+        else:
+            return results
 
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
@@ -34,21 +38,28 @@ def create_user(new_user : Users):
         
         for i in results:
             if i.email == new_user.email:
-                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail={"Ya existe un usuario con este id"})
-
-        session.add(new_user)
-        session.commit()
-    return {"Se creo un nuevo usuario."}
+                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                                     detail={"error" : "Ya existe un usuario con este email"})
+        else:
+            session.add(new_user)
+            session.commit()
+            return {"Se creo un nuevo usuario."}
 
 # Actualiza un usuario segun su ID
-@router.put("/{id}", status_code=status.HTTP_202_ACCEPTED)
-def update_user(user_: Users):
+@router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)
+def update_user(user: Users):
     with Session(engine) as session:
-        statement = select(Users).where(Users.user_id == user_.id)
+        statement = select(Users).where(Users.user_id == user.user_id)
         user_found = session.exec(statement).first()
-        user_found = user_
-        session.commit()    
-    return {"El usuario fue actualizado"}
+
+        if user_found is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
+        else:
+            user_found.email = user.email
+            user_found.password = user.password
+            user_found.username = user.username
+            session.commit()    
+        return {"El usuario fue actualizado"}
 
 
 # Elimina la tarea con id especifico
@@ -57,8 +68,11 @@ def delete_user(id_ : int):
     with Session(engine) as session:
         statement = select(Users).where(Users.user_id == id_)
         resultado = session.exec(statement).first()
-    
-        session.delete(resultado)
 
-        session.commit()
-    return {"El usuario se ha eliminado con éxito"}
+        if resultado is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
+        else:
+            session.delete(resultado)
+            session.commit()
+        
+        return {"detail" : "El usuario se ha eliminado con éxito"}

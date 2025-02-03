@@ -15,6 +15,7 @@ def tasks_all():
         results = session.exec(statement).all()
         return results
 
+
 # Lee la tarea de id especifico
 @router.get("/{id}", status_code=status.HTTP_202_ACCEPTED)
 def tasks_search_id(id: int):
@@ -24,6 +25,7 @@ def tasks_search_id(id: int):
         return results
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se encontro la nota"})
 
+
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_task(task : Tasks):
@@ -31,6 +33,7 @@ def create_task(task : Tasks):
         session.add(task)
         session.commit()
         return {"Se creo una nueva tarea."}
+
 
 # Actualiza un usuario segun su ID
 @router.put("/{id}", status_code=status.HTTP_202_ACCEPTED)
@@ -42,17 +45,16 @@ def update_task(task: Tasks):
         # Obtiene un unico valor
         task_selected = result.one()
         
-        # Se modifica el registro
-        task_selected.text = task.text
-        
-        # Se guardan los cambios
-        session.commit()
-        
-        return {"Ha sido actualizado con exito"}
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se pudo actualizar la nota"})
-
-
-
+        if task_selected is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error":"No se ha encontrado la nota"})
+        else:
+            # Se modifica el registro
+            task_selected.text = task.text
+            
+            # Se guardan los cambios
+            session.commit()
+            
+            return {"detail" : "Ha sido actualizado con exito"}
 
 
 # Elimina la tarea con id especifico
