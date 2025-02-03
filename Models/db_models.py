@@ -7,6 +7,10 @@ class Users(SQLModel, table=True):
     disabled : bool = Field(default=False)
     password : str
 
+class UserRead(SQLModel):
+    username : str
+    email : str
+
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str

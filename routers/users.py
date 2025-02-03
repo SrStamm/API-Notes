@@ -1,41 +1,40 @@
 from fastapi import APIRouter, status, HTTPException
-from Models.db_models import Users
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from Models.db_models import Users, UserRead
 from DB.database import Session, engine, select
+from typing import List
 
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
 
-oauth2 = OAuth2PasswordBearer(tokenUrl="login")
-
-
-# Lee todas las tareas
+# Lee todos los usuarios
 @router.get("/")
 def get_users_all():
     with Session(engine) as session:
         statement = select(Users)
-        results = session.exec(statement).all()
+        results = session.exec(statement)
         return results
 
-# Lee la tarea de id especifico
-@router.get("/{id}")
+# Lee el usuario de id especifico
+@router.get("/{id}", response_model=UserRead)
 def get_users_with_id(id: int):
     with Session(engine) as session:
         statement = select(Users).where(Users.user_id == id)
         results = session.exec(statement).first()
 
+        # Comprueba si es nulo, y lanza una excepcion si es asi
         if results is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         else:
             return results
 
-# Crea una nueva tarea
+# Crea un nuevo usuario
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
 def create_user(new_user : Users):
     with Session(engine) as session:
         statement = select(Users)
         results = session.exec(statement).all()
         
+        # Comprueba si ya existe ese email, y lanza una excepcion si es asi
         for i in results:
             if i.email == new_user.email:
                 raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
@@ -52,6 +51,7 @@ def update_user(user: Users):
         statement = select(Users).where(Users.user_id == user.user_id)
         user_found = session.exec(statement).first()
 
+        # Comprueba si es nulo, y lanza una excepcion si es asi
         if user_found is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         else:
@@ -62,7 +62,7 @@ def update_user(user: Users):
         return {"El usuario fue actualizado"}
 
 
-# Elimina la tarea con id especifico
+# Elimina el usuario con id especifico
 @router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(id_ : int):
     with Session(engine) as session:
