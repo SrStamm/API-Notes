@@ -4,7 +4,7 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from Models.User import User, User_BD
-from Models.db_models import User
+from Models.db_models import Users
 
 router = APIRouter(tags=["Authentication"])
 
@@ -22,6 +22,9 @@ crypt = CryptContext(schemes=["bcrypt"])
 
 # Se declara la url donde se obtiene el token
 oauth2 = OAuth2PasswordBearer(tokenUrl="login")
+
+def encrypt_password(password : str):
+    return crypt.encrypt(password)
 
 # Lista de usuarios
 users_db = {

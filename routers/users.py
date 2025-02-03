@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException
 from Models.db_models import Users, UserRead
 from DB.database import Session, engine, select
-from typing import List
+from routers.auth import encrypt_password
 
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -40,6 +40,7 @@ def create_user(new_user : Users):
                 raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
                                      detail={"error" : "Ya existe un usuario con este email"})
         else:
+            new_user.password = encrypt_password(new_user.password)
             session.add(new_user)
             session.commit()
             return {"Se creo un nuevo usuario."}
@@ -56,7 +57,7 @@ def update_user(user: Users):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         else:
             user_found.email = user.email
-            user_found.password = user.password
+            user_found.password = encrypt_password(user.password)
             user_found.username = user.username
             session.commit()    
         return {"El usuario fue actualizado"}
