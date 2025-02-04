@@ -49,18 +49,22 @@ def create_user(new_user : Users):
 
 # Actualiza un usuario segun su ID
 @router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)
-def update_user(user: Users):
+def update_user(user_id : int, user: Users):
     with Session(engine) as session:
-        statement = select(Users).where(Users.user_id == user.user_id)
+        statement = select(Users).where(Users.user_id == user_id)
         user_found = session.exec(statement).first()
 
         # Comprueba si es nulo, y lanza una excepcion si es asi
         if user_found is None:
+            print(user_found)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         else:
-            user_found.email = user.email
-            user_found.password = encrypt_password(user.password)
-            user_found.username = user.username
+            if user.email is not None:
+                user_found.email = user.email
+            if user.password is not None:
+                user_found.password = encrypt_password(user.password)
+            if user.username is not None:
+                user_found.username = user.username
             session.commit()    
         return {"El usuario fue actualizado"}
 
