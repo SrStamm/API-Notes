@@ -7,6 +7,20 @@ class Users(SQLModel, table=True):
     disabled : bool = Field(default=False)
     password : str
 
+    model_config = {
+        "json_schema_extra" : {
+            "examples" : [
+                {
+                    "user_id" : 1,
+                    "username" : "user",
+                    "email" : "user@mail.com",
+                    "disabled" : False,
+                    "password" : "1234560"
+                }
+            ]
+        }
+    }
+
 class UserRead(SQLModel):
     username : str
     email : str

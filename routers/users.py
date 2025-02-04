@@ -7,15 +7,15 @@ from routers.auth import encrypt_password
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # Lee todos los usuarios
-@router.get("/")
+@router.get("/", status_code=status.HTTP_200_OK, response_model=UserRead)
 def get_users_all():
     with Session(engine) as session:
         statement = select(Users)
-        results = session.exec(statement).all()
-        return results
+        user_found = session.exec(statement).all()
+    return user_found
 
 # Lee el usuario de id especifico
-@router.get("/{id}", response_model=UserRead)
+@router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK)
 def get_users_with_id(id: int):
     with Session(engine) as session:
         statement = select(Users).where(Users.user_id == id)
