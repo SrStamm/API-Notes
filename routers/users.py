@@ -65,6 +65,8 @@ def update_user(user_id : int, user: Users):
                 user_found.password = encrypt_password(user.password)
             if user.username is not None:
                 user_found.username = user.username
+            if user.permission is not None:
+                user_found.username = user.permission
             session.commit()    
         return {"El usuario fue actualizado"}
 

@@ -6,6 +6,7 @@ class Users(SQLModel, table=True):
     email : str
     disabled : bool = Field(default=False)
     password : str
+    permission : bool = Field(default=False)
 
     model_config = {
         "json_schema_extra" : {
@@ -15,7 +16,8 @@ class Users(SQLModel, table=True):
                     "username" : "user",
                     "email" : "user@mail.com",
                     "disabled" : False,
-                    "password" : "1234560"
+                    "password" : "1234560",
+                    "permission" : False
                 }
             ]
         }
