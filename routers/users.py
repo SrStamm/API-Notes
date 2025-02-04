@@ -7,7 +7,7 @@ from routers.auth import encrypt_password
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # Lee todos los usuarios
-@router.get("/", status_code=status.HTTP_200_OK, response_model=UserRead)
+@router.get("/", status_code=status.HTTP_200_OK)
 def get_users_all():
     with Session(engine) as session:
         statement = select(Users)

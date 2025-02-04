@@ -12,7 +12,7 @@ router = APIRouter(prefix="/login", tags=["Authentication"])
 ALGORITHM = "HS256"
 
 # Definimos la duracion del TOKEN
-ACCESS_TOKEN_DURATION = 5
+ACCESS_TOKEN_DURATION = 500
 
 # Definimos una llave secreta
 SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"
@@ -26,8 +26,7 @@ oauth2 = OAuth2PasswordBearer(tokenUrl="login")
 # Funcion que encripta la contraseña
 def encrypt_password(password : str):
     password = password.encode()
-    bash_password = crypt.hash(secret=password)    
-    return bash_password
+    return crypt.hash(password)
 
 # Proceso de validacion de Token encriptado
 async def auth_user(token: str = Depends(oauth2)):
@@ -48,7 +47,7 @@ async def auth_user(token: str = Depends(oauth2)):
 
     with Session(engine) as session:
         statement = select(Users).where(Users.username == username)
-        user_found = session.exec(statement).first
+        user_found = session.exec(statement).first()
         return user_found
 
 
@@ -90,8 +89,4 @@ async def current_user(user: Users = Depends(auth_user)):
 # Lee los datos del usuario
 @router.get("/me", response_model=UserRead)
 async def user_me(user: Users = Depends(current_user)):
-    user = auth_user()
-    with Session(engine) as session:
-        statement = select(Users).where(Users.username == user.username)
-        user_found = session.exec(statement)
-        return user_found
+    return user

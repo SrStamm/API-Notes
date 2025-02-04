@@ -22,12 +22,14 @@ class Users(SQLModel, table=True):
     }
 
 class UserRead(SQLModel):
+    user_id : int | None = None
     username : str
     email : str
 
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str
+    user_id : int | None = Field(default=int, foreign_key="users.user_id")
 
 class TaskRead(SQLModel):
     text : str

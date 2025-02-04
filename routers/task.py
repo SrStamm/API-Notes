@@ -1,6 +1,7 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Depends
 from Models.db_models import Tasks, TaskRead
 from DB.database import Session, engine, select
+from routers.auth import current_user, user_me
 
 # Router de la app
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -20,17 +21,24 @@ def tasks_search_id(id: int):
     with Session(engine) as session:
         statement = select(Tasks).where(Tasks.id == id)
         results = session.exec(statement).first()
-        return results
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se encontro la nota"})
-
+        
+        if results is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"No se encontro la nota"})
+        else:
+            return results
+    
 
 # Crea una nueva tarea
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_task(task : Tasks):
+def create_task(task: Tasks, user=Depends(current_user)):
     with Session(engine) as session:
+        # Asigna el user_id de la tarea con el id del usuario autenticado
+        task.user_id = user.user_id  # O user.id, según cómo lo tengas definido en tu modelo
+
         session.add(task)
         session.commit()
-        return {"Se creo una nueva tarea."}
+        session.refresh(task)
+    return {"detail": "Se creó una nueva tarea.", "task": task}
 
 
 # Actualiza un usuario segun su ID
