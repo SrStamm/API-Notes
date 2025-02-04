@@ -61,7 +61,6 @@ def update_user(user_id : int, user: Users):
 
         # Comprueba si es nulo, y lanza una excepcion si es asi
         if user_found is None:
-            print(user_found)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         else:
             if user.email is not None:
@@ -87,7 +86,7 @@ def delete_actual_user(user = Depends(current_user)):
         return {"detail" : "El usuario se ha eliminado con éxito"}
         
 
-# Elimina el usuario actual
+# Elimina el usuario indicado por id
 @router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_actual_user(id_ : int, user = Depends(current_user)):
     if user.permission is True:

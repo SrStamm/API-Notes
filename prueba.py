@@ -5,7 +5,10 @@ from routers import task, users, auth
 from DB.database import Session, engine, create_db_and_tables
 
 # Inicializa la app
-app = FastAPI()
+app = FastAPI(
+    title="API de Notas",
+    description="Esta API realiza un CRUD sobre notas y usuarios, con autenticacion y donde cada usuario puede tener sus propias notas"
+)
 
 # Inicializa la base de datos
 create_db_and_tables()
