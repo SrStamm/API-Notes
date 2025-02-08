@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from Models.db_models import Tasks, TaskRead
 from DB.database import Session, engine, select
-from routers.auth import current_user, user_me
+from routers.auth import current_user
 
 # Router de la app
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -68,6 +68,8 @@ def update_task(task: Tasks, user=Depends(current_user)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error":"No se ha encontrado la nota"})
         else:
             task_selected.text = task.text      # Se modifica el registro
+            task_selected.title = task.title
+            task_selected.category = task.category
             session.commit()                    # Se guardan los cambios
             return {"detail" : "Ha sido actualizado con exito"}
 

@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True)
     username : str
-    email : str
+    email : str 
     disabled : bool = Field(default=False)
     password : str
     permission : bool = Field(default=False)

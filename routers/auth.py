@@ -85,8 +85,3 @@ async def current_user(user: Users = Depends(auth_user)):
             detail="Usuario inactivo")
       
     return user
-
-# Lee los datos del usuario
-@router.get("/me", response_model=UserRead)
-async def user_me(user: Users = Depends(current_user)):
-    return user

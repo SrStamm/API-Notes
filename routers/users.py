@@ -6,6 +6,11 @@ from routers.auth import encrypt_password, current_user
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
 
+# Lee el usuario actual
+@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+def read_me(user : UserRead = Depends(current_user)):
+    return user
+
 # Lee todos los usuarios
 @router.get("/", status_code=status.HTTP_200_OK)
 def get_users_all(user = Depends(current_user)):
@@ -17,7 +22,7 @@ def get_users_all(user = Depends(current_user)):
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                              detail={"error":"No estas autorizado para ejecutar esta accion"})
-    
+
 
 # Lee el usuario de id especifico
 @router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK)
@@ -36,21 +41,26 @@ def get_users_with_id(id: int):
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
 def create_user(new_user : Users):
     with Session(engine) as session:
-        statement = select(Users)
-        results = session.exec(statement).all()
+        statement = select(Users).where(Users.username == new_user.username)
+        results = session.exec(statement).first()
         
-        # Comprueba si ya existe ese email, y lanza una excepcion si es asi
-        for i in results:
-            if i.email == new_user.email:
+        if results is not None:
+            statement = select(Users).where(Users.email == new_user.email)
+            results = session.exec(statement).first()
+
+            if results is not None:
+                session.add(new_user)
+                session.commit()
+                session.refresh(new_user)
+                new_user.password = encrypt_password(new_user.password)
+                session.commit()
+                return {"Se creo un nuevo usuario."}
+            else:
                 raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
                                      detail={"error" : "Ya existe un usuario con este email"})
         else:
-            session.add(new_user)
-            session.commit()
-            session.refresh(new_user)
-            new_user.password = encrypt_password(new_user.password)
-            session.commit()
-            return {"Se creo un nuevo usuario."}
+            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                                     detail={"error" : "Ya existe un usuario con este username"})
 
 # Actualiza un usuario segun su ID
 @router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)
