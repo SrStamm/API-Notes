@@ -44,23 +44,25 @@ def create_user(new_user : Users):
         statement = select(Users).where(Users.username == new_user.username)
         results = session.exec(statement).first()
         
-        if results is not None:
-            statement = select(Users).where(Users.email == new_user.email)
-            results = session.exec(statement).first()
-
-            if results is not None:
-                session.add(new_user)
-                session.commit()
-                session.refresh(new_user)
-                new_user.password = encrypt_password(new_user.password)
-                session.commit()
-                return {"Se creo un nuevo usuario."}
-            else:
-                raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
-                                     detail={"error" : "Ya existe un usuario con este email"})
+        if results is None:
+            pass
         else:
             raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
                                      detail={"error" : "Ya existe un usuario con este username"})
+        
+        statement = select(Users).where(Users.email == new_user.email)
+        results = session.exec(statement).first()
+
+        if results is None:
+            session.add(new_user)
+            session.commit()
+            session.refresh(new_user)
+            new_user.password = encrypt_password(new_user.password)
+            session.commit()
+            return {"Se creo un nuevo usuario."}
+        else:
+            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                                    detail={"error" : "Ya existe un usuario con este email"})
 
 # Actualiza un usuario segun su ID
 @router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)

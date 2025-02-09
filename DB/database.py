@@ -1,4 +1,4 @@
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select, or_
 from Models.db_models import Users, Tasks
 
 sqlite_file_name = "C:\\Users\\Mirko Alexander\\Desktop\\Backend\\to-do\\DB\\database.sqlite"

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, HTTPException, Depends, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -30,7 +30,7 @@ def encrypt_password(password : str):
 
 # Proceso de validacion de Token encriptado
 async def auth_user(token: str = Depends(oauth2)):
-    
+    # authorization: str = Header(oauth2, description="Token de Acceso Bearer")
     exception = HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, 
                     detail="Credenciales de autenticación inválidas", 
@@ -53,26 +53,23 @@ async def auth_user(token: str = Depends(oauth2)):
 
 @router.post("/")
 async def login(form: OAuth2PasswordRequestForm = Depends()):
-
-    # Obtiene el usuario con el mismo username
-    # user_list = users_db.get(form.username)
     with Session(engine) as session:
         statement = select(Users).where(Users.username == form.username)
         user_found = session.exec(statement).first()
 
         if user_found is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="El usuario no es correcto")
+                                detail="Usuario no encontrado o no existe")
 
         # Caso no tenga el mismo password, da error
         if not crypt.verify(form.password, user_found.password):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La contraseña no es correcta")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña incorrecta")
 
         if user_found.disabled is True:
-            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="El usuario esta desactivado")
+            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="Usuario inactivo")
     
         access_token = {"sub": user_found.username,
-                    "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)}
+                        "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)}
 
         # Devuelve el token de acceso
         return {"access_token" : jwt.encode(access_token, SECRET, algorithm=ALGORITHM), "token_type" : "bearer"}
