@@ -1,6 +1,7 @@
 # Crear una API de tareas pendientes
 
 from fastapi import FastAPI, status
+from fastapi.testclient import TestClient
 from fastapi.requests import Request
 from fastapi.responses import Response, JSONResponse
 from routers import task, users, auth
@@ -40,4 +41,4 @@ async def global_error_handler(request : Request, call_next):
 # Base
 @app.get("/", include_in_schema=False)
 def root():
-    return {"Bienvenido! Mira todas las tareas pendientes."}
+    return {"messaje":"Bienvenido! Mira todas las tareas pendientes."}

@@ -14,14 +14,15 @@ def read_me(user : UserRead = Depends(current_user)):
 
 # Lee todos los usuarios
 @router.get("/all", status_code=status.HTTP_200_OK)
-def get_users_all(user = Depends(current_user), session : Session = Depends(get_session),
-                  q : Annotated[str | None, Query()] = None):
+def get_users_all(user = Depends(current_user), session : Session = Depends(get_session)) -> list[UserRead]:
+    statement = select(Users)
+    user_found = session.exec(statement).all()
+    return user_found
+    
+# Lee todos los usuarios
+@router.get("/all/info", status_code=status.HTTP_200_OK)
+def get_users_all(user = Depends(current_user), session : Session = Depends(get_session)) -> list[Users]:
     if user.permission is True:
-        if q:
-            statement = select(Users).where(Users.email == q)
-            user_found = session.exec(statement).one()
-            return user_found
-        else:
             statement = select(Users)
             user_found = session.exec(statement).all()
             return user_found
@@ -33,14 +34,14 @@ def get_users_all(user = Depends(current_user), session : Session = Depends(get_
 # Lee el usuario de id especifico
 @router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK)
 def get_users_with_id(id: int, session : Session = Depends(get_session)):
-    try:
-        statement = select(Users).where(Users.user_id == id)
-        results = session.exec(statement).first()
-
-        return results
     
-    except:
+    statement = select(Users).where(Users.user_id == id)
+    results = session.exec(statement).first()
+
+    if results is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
+    else:
+        return results
 
 # Crea un nuevo usuario
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
