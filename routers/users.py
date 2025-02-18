@@ -1,7 +1,8 @@
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, HTTPException, Depends, Query
 from Models.db_models import Users, UserRead
-from DB.database import Session, engine, select
+from DB.database import Session, engine, select, get_session
 from routers.auth import encrypt_password, current_user
+from typing import Annotated
 
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -12,57 +13,61 @@ def read_me(user : UserRead = Depends(current_user)):
     return user
 
 # Lee todos los usuarios
-@router.get("/", status_code=status.HTTP_200_OK)
-def get_users_all(user = Depends(current_user)):
+@router.get("/all", status_code=status.HTTP_200_OK)
+def get_users_all(user = Depends(current_user), session : Session = Depends(get_session),
+                  q : Annotated[str | None, Query()] = None):
     if user.permission is True:
-        with Session(engine) as session:
+        if q:
+            statement = select(Users).where(Users.email == q)
+            user_found = session.exec(statement).one()
+            return user_found
+        else:
             statement = select(Users)
             user_found = session.exec(statement).all()
-        return user_found
+            return user_found
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                             detail={"error":"No estas autorizado para ejecutar esta accion"})
+                                        detail={"error":"No estas autorizado para ejecutar esta accion"})
 
 
 # Lee el usuario de id especifico
 @router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK)
-def get_users_with_id(id: int):
-    with Session(engine) as session:
+def get_users_with_id(id: int, session : Session = Depends(get_session)):
+    try:
         statement = select(Users).where(Users.user_id == id)
         results = session.exec(statement).first()
 
-        # Comprueba si es nulo, y lanza una excepcion si es asi
-        if results is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
-        else:
-            return results
+        return results
+    
+    except:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
 
 # Crea un nuevo usuario
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
-def create_user(new_user : Users):
-    with Session(engine) as session:
-        statement = select(Users).where(Users.username == new_user.username)
-        results = session.exec(statement).first()
-        
-        if results is None:
-            pass
-        else:
-            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
-                                     detail={"error" : "Ya existe un usuario con este username"})
-        
-        statement = select(Users).where(Users.email == new_user.email)
-        results = session.exec(statement).first()
+def create_user(new_user : Users, session : Session = Depends(get_session)):
 
-        if results is None:
-            session.add(new_user)
-            session.commit()
-            session.refresh(new_user)
-            new_user.password = encrypt_password(new_user.password)
-            session.commit()
-            return {"Se creo un nuevo usuario."}
-        else:
-            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
-                                    detail={"error" : "Ya existe un usuario con este email"})
+    statement = select(Users).where(Users.username == new_user.username)
+    results = session.exec(statement).first()
+    
+    if results:
+        pass
+    else:
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                                    detail={"error" : "Ya existe un usuario con este username"})
+    
+    statement = select(Users).where(Users.email == new_user.email)
+    results = session.exec(statement).first()
+
+    if results is None:
+        session.add(new_user)
+        session.commit()
+        session.refresh(new_user)
+        new_user.password = encrypt_password(new_user.password)
+        session.commit()
+        return {"Se creo un nuevo usuario."}
+    else:
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                                detail={"error" : "Ya existe un usuario con este email"})
 
 # Actualiza un usuario segun su ID
 @router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)

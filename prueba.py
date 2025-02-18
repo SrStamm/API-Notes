@@ -24,7 +24,7 @@ app.include_router(task.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 
-@app.middleware(middleware_type='http')
+"""@app.middleware(middleware_type='http')
 async def global_error_handler(request : Request, call_next):
     print("Middleware is running!")
     try:
@@ -35,9 +35,9 @@ async def global_error_handler(request : Request, call_next):
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": {"type": "ServerError", "message": "Error interno del servidor no esperado"}}, # Formato JSON consistente
-        )
+        )"""
 
 # Base
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
     return {"Bienvenido! Mira todas las tareas pendientes."}
