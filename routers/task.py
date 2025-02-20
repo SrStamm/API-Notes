@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.get("/")
-def get_tasks_user(user = Depends(current_user), session : Session = Depends(get_session)):
+def get_tasks_user(user = Depends(current_user), session : Session = Depends(get_session)) -> list[TaskRead]:
     try:
         statement = select(Tasks).where(Tasks.user_id == user.user_id)
         results = session.exec(statement).all()
@@ -25,7 +25,7 @@ def get_tasks_user(user = Depends(current_user), session : Session = Depends(get
 
 
 @router.get("/all")
-def get_tasks_all(user=Depends(current_user), session : Session = Depends(get_session)):
+def get_tasks_all(user=Depends(current_user), session : Session = Depends(get_session)) -> list[Tasks]:
     if not user.permission:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autorizado.")
 
@@ -48,6 +48,7 @@ def tasks_search_id(id: int, user=Depends(current_user), session : Session = Dep
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
         return result
+    
     except SQLAlchemyError as e:
         logger.error(f"Error en tasks_search_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
@@ -76,13 +77,11 @@ def update_task(task: Tasks, user=Depends(current_user), session : Session = Dep
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
 
         task_selected.text = task.text
-        task_selected.title = task.title
-        task_selected.category = task.category
         session.commit()
         return {"detail": "Tarea actualizada con éxito"}
     except SQLAlchemyError as e:
         logger.error(f"Error en update_task: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar la tarea.")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"error":"Error al actualizar la tarea."})
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -93,10 +92,10 @@ def delete_task(id: int, user=Depends(current_user), session : Session = Depends
 
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
-
-        session.delete(result)
-        session.commit()
-        return {"detail": "Tarea eliminada exitosamente"}
+        else:
+            session.delete(result)
+            session.commit()
+            return {"detail": "Tarea eliminada exitosamente"}
     except SQLAlchemyError as e:
         logger.error(f"Error en delete_task: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la tarea.")
