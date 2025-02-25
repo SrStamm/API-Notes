@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 from prueba import app
 
 client = TestClient(app)
@@ -8,63 +9,58 @@ def test_read_main():
     assert response.status_code == 200
     assert response.json() == {"messaje":"Bienvenido! Mira todas las tareas pendientes."}
 
-def get_auth_token():
-    login_data = {"username": "mirko_dev", "password": "123456"}  # Asegúrate de usar credenciales correctas
-    response = client.post("/login", data=login_data)  # OAuth usa 'data', no 'json'
-    assert response.status_code == 200, response.json()
-    return response.json()["access_token"]
+@pytest.fixture
+def auth_headers():
+    login_data = {"username": "mirko_dev", "password": "123456"}  # Credenciales
+    response = client.post("/login", data=login_data)  # OAuth usa 'data'
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
-def test_get_task_me():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
+def test_get_user_me(auth_headers):
+    response = client.get("/users/me", headers=auth_headers)  
+    assert response.status_code == 200
+    user_data = response.json()
+    assert all(key in user_data for key in ["username","email","user_id"])
+    assert response.json() == {"username": "mirko_dev", "email":"mirko@dev.com", "user_id":3}
 
-    response = client.get("/tasks/", headers=headers)
-    # assert response.status_code == 200
+def test_get_user_all(auth_headers):
+    response = client.get("/users/", headers=auth_headers)
+    assert response.status_code == 200
+    users = response.json()
+    assert isinstance(users, list)    
+    for user in users:
+        assert all(key in user for key in ["username","email","user_id"])
 
+def test_get_task_me(auth_headers):
+    response = client.get("/tasks/", headers=auth_headers)
+    assert response.status_code == 200
     tasks = response.json()
     assert isinstance(tasks, list)
-
     for task in tasks:
         assert "text" in task
 
-def test_get_task_all():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.get("/tasks/all", headers=headers)
-    # assert response.status_code == 200
-
+def test_get_task_all(auth_headers):
+    response = client.get("/tasks/all", headers=auth_headers)
+    assert response.status_code == 200
     tasks = response.json()
     assert isinstance(tasks, list)
-
     for task in tasks:
-        assert "id" in task
-        assert "text" in task
-        assert "user_id" in task
+        assert all(key in task for key in ["id","text","user_id"])
 
-def test_get_task_id():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.get("/tasks/1", headers=headers)
+def test_get_task_id(auth_headers):
+    response = client.get("/tasks/2", headers=auth_headers)
     assert response.status_code == 202
-
     task = response.json()
-    assert task == {"text": "nota"}
+    assert "text" in task
 
-def test_failed_get_task_id_():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.get("/tasks/10000000", headers=headers)
+def test_failed_get_task_id(auth_headers):
+    response = client.get("/tasks/10000000", headers=auth_headers)
     assert response.status_code == 404
     assert response.json() == {"detail":"No se encontró la tarea."}
 
-def test_create_task():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.post("/tasks/", headers=headers, json={"text":"texto de prueba de creacion"})
+def test_create_task(auth_headers):
+    response = client.post("/tasks/", headers=auth_headers, json={"text":"Nueva tarea"})
     assert response.status_code == 201
     assert response.json() == {"detail": "Se creó una nueva tarea."}
 
@@ -73,28 +69,21 @@ def test_failed_create_task():
     assert response.status_code == 401
     assert response.json() == {"detail":"Not authenticated"}
 
-def test_update_task():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.put("/tasks/5", headers=headers, json={"id":5,"text":"texto de prueba de actualizacion"})
-    # assert response.status_code == 202
+def test_update_task(auth_headers):
+    response = client.put("/tasks/2", headers=auth_headers, json={"text":"Actualizacion", "category":"Test"})
+    assert response.status_code == 202
     assert response.json() == {"detail": "Tarea actualizada con éxito"}
 
-def test_failed_update_task():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.put("/tasks/666666", headers=headers, json={"id":6666666,"text":"texto de prueba de actualizacion"})
+def test_failed_update_task(auth_headers):
+    response = client.put("/tasks/666666", headers=auth_headers, json={"id":6666666,"text":"Error"})
     assert response.status_code == 404
     assert response.json() == {"detail": "No se encontró la tarea."}
 
-def test_delete_task():
-    token = get_auth_token()
-    headers = {"Authorization": f"Bearer {token}"}
-
-    response = client.delete("/tasks/13", headers=headers)
+def test_delete_task(auth_headers):
+    response = client.delete("/tasks/12", headers=auth_headers)
     assert response.status_code == 204
 
-def test_failed_delete_task():
-    return
+def test_failed_delete_task(auth_headers):
+    response = client.delete("/tasks/10000", headers=auth_headers)
+    assert response.status_code == 404
+    assert response.json() == {"detail":"No se encontró la tarea."}

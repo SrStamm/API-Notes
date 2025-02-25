@@ -1,9 +1,9 @@
-from fastapi import APIRouter, status, HTTPException, Depends, Header
+from fastapi import APIRouter, status, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from Models.db_models import Users, UserRead
+from Models.db_models import Users
 from DB.database import Session, engine, select
 
 router = APIRouter(prefix="/login", tags=["Authentication"])
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/login", tags=["Authentication"])
 ALGORITHM = "HS256"
 
 # Definimos la duracion del TOKEN
-ACCESS_TOKEN_DURATION = 10
+ACCESS_TOKEN_DURATION = 30
 
 # Definimos una llave secreta
 SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, HTTPException, Depends, Query
+from fastapi import APIRouter, status, HTTPException, Depends, Path, Query
 from Models.db_models import Users, UserRead
 from DB.database import Session, engine, select, get_session
 from routers.auth import encrypt_password, current_user
@@ -7,21 +7,21 @@ from typing import Annotated
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
 
-# Lee el usuario actual
-@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
-def read_me(user : UserRead = Depends(current_user)):
-    return user
-
-# Lee todos los usuarios
-@router.get("/all", status_code=status.HTTP_200_OK)
-def get_users_all(user = Depends(current_user), session : Session = Depends(get_session)) -> list[UserRead]:
-    statement = select(Users)
+# Todos los usuarios disponibles
+@router.get("/", status_code=status.HTTP_200_OK, response_model=list[UserRead])
+def read_all_users(limit : int = 5, offset: int = 0,session : Session = Depends(get_session)) -> list[UserRead]:
+    statement = select(Users).offset(offset).limit(limit)
     user_found = session.exec(statement).all()
     return user_found
+
+# Lee el usuario actual
+@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+def read_me(user : UserRead = Depends(current_user)) -> UserRead:
+    return user
     
 # Lee todos los usuarios
-@router.get("/all/info", status_code=status.HTTP_200_OK)
-def get_users_all(user = Depends(current_user), session : Session = Depends(get_session)) -> list[Users]:
+@router.get("/all-users", status_code=status.HTTP_200_OK)
+def read_all_users_by_admin(user = Depends(current_user), session : Session = Depends(get_session)) -> list[Users]:
     if user.permission is True:
             statement = select(Users)
             user_found = session.exec(statement).all()
@@ -33,8 +33,7 @@ def get_users_all(user = Depends(current_user), session : Session = Depends(get_
 
 # Lee el usuario de id especifico
 @router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK)
-def get_users_with_id(id: int, session : Session = Depends(get_session)):
-    
+def read_users_with_id(id: int = Path(ge=0), session : Session = Depends(get_session)) -> UserRead:
     statement = select(Users).where(Users.user_id == id)
     results = session.exec(statement).first()
 
@@ -50,7 +49,7 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
     statement = select(Users).where(Users.username == new_user.username)
     results = session.exec(statement).first()
     
-    if results:
+    if not results:
         pass
     else:
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,

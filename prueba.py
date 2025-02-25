@@ -1,9 +1,7 @@
 # Crear una API de tareas pendientes
 
-from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
-from fastapi.requests import Request
-from fastapi.responses import Response, JSONResponse
+from fastapi import FastAPI, status, Request
+from fastapi.responses import JSONResponse
 from routers import task, users, auth
 from DB.database import Session, engine, create_db_and_tables
 
@@ -25,7 +23,7 @@ app.include_router(task.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 
-"""@app.middleware(middleware_type='http')
+@app.middleware(middleware_type='http')
 async def global_error_handler(request : Request, call_next):
     print("Middleware is running!")
     try:
@@ -36,7 +34,7 @@ async def global_error_handler(request : Request, call_next):
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"error": {"type": "ServerError", "message": "Error interno del servidor no esperado"}}, # Formato JSON consistente
-        )"""
+        )
 
 # Base
 @app.get("/", include_in_schema=False)

@@ -1,4 +1,5 @@
 from sqlmodel import Field, SQLModel
+from datetime import date
 
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, description="Se crea solo")
@@ -28,7 +29,9 @@ class UserRead(SQLModel):
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str
+    create_date : date = Field(default=date.today().strftime, description="Fecha de creacion")
+    category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
     user_id : int | None = Field(default=int, foreign_key="users.user_id", description="Relacion con el usuario")
-
 class TaskRead(SQLModel):
     text : str
+    category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
