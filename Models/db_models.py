@@ -28,6 +28,12 @@ class UserRead(SQLModel):
     username : str
     email : str
 
+class UserUpdate(SQLModel):
+    username : str | None = None
+    email : str | None = None
+    password : str | None = None
+    permission: bool | None = None
+
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str
@@ -38,3 +44,7 @@ class Tasks(SQLModel, table=True):
 class TaskRead(SQLModel):
     text : str
     category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
+
+class TaskUpdate(SQLModel):
+    text: str | None = None
+    category: str | None = None

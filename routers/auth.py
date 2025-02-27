@@ -48,6 +48,12 @@ async def auth_user(token: str = Depends(oauth2)):
     with Session(engine) as session:
         statement = select(Users).where(Users.username == username)
         user_found = session.exec(statement).first()
+
+        if user_found.disabled is True:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Usuario inactivo")
+    
         return user_found
 
 
@@ -75,10 +81,5 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
         return {"access_token" : jwt.encode(access_token, SECRET, algorithm=ALGORITHM), "token_type" : "bearer"}
 
 # Valida si el user esta acivo
-async def current_user(user: Users = Depends(auth_user)):
-    if user.disabled == True:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Usuario inactivo")
-      
+async def current_user(user: Users = Depends(auth_user)):      
     return user
