@@ -70,17 +70,17 @@ def test_failed_create_task():
     assert response.json() == {"detail":"Not authenticated"}
 
 def test_update_task(auth_headers):
-    response = client.put("/tasks/5", headers=auth_headers, json={"text":"Actualizacion", "category":"Test"})
+    response = client.patch("/tasks/5", headers=auth_headers, json={"text":"Actualizacion", "category":"Test"})
     assert response.status_code == 202
     assert response.json() == {"detail": "Tarea actualizada con éxito"}
 
 def test_failed_update_task(auth_headers):
-    response = client.put("/tasks/666666", headers=auth_headers, json={"id":6666666,"text":"Error"})
+    response = client.patch("/tasks/666666", headers=auth_headers, json={"id":6666666,"text":"Error"})
     assert response.status_code == 404
     assert response.json() == {"detail": "No se encontró la tarea."}
 
 """def test_delete_task(auth_headers):
-    response = client.delete("/tasks/12", headers=auth_headers)
+    response = client.delete("/tasks/6", headers=auth_headers)
     assert response.status_code == 204"""
 
 def test_failed_delete_task(auth_headers):

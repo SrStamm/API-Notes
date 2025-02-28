@@ -1,6 +1,6 @@
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 from datetime import date
-from enum import Enum
+from typing import List, Optional
 
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")
@@ -10,6 +10,8 @@ class Users(SQLModel, table=True):
     password : str 
     permission : bool = Field(default=False, description="Permisos de admin")
     probando : str | None = Field(default=None)
+
+    tasks : List["Tasks"] = Relationship(back_populates="user")
 
     model_config = {
         "json_schema_extra" : {
@@ -41,10 +43,13 @@ class Tasks(SQLModel, table=True):
     category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
     user_id : int | None = Field(default=int, foreign_key="users.user_id", description="Relacion con el usuario")
 
+    user: "Users" = Relationship(back_populates="tasks")
+
 class TaskRead(SQLModel):
+    id: int
     text : str
     category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
 
 class TaskUpdate(SQLModel):
     text: str | None = None
-    category: str | None = None
+    category: str = "Unknown"

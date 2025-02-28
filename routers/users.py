@@ -1,6 +1,6 @@
-from fastapi import APIRouter, status, HTTPException, Depends, Path, Query
+from fastapi import APIRouter, status, HTTPException, Depends, Path
 from Models.db_models import Users, UserRead, UserUpdate
-from DB.database import Session, engine, select, get_session
+from DB.database import Session, select, get_session
 from routers.auth import encrypt_password, current_user
 
 # Router
@@ -26,14 +26,15 @@ def read_me(user : UserRead = Depends(current_user)) -> UserRead:
 # Lee el usuario de id especifico
 @router.get("/{id}", response_model=UserRead, status_code=status.HTTP_200_OK,
             description="Obtiene un usuario segun el id indicado")
-def read_users_with_id(id: int = Path(ge=0), session : Session = Depends(get_session)) -> UserRead:
+def read_users_with_id(id: int = Path(ge=0),
+                       session : Session = Depends(get_session)) -> UserRead:
     statement = select(Users).where(Users.user_id == id)
     results = session.exec(statement).first()
 
     if results is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
-    else:
-        return results
+    
+    return results
 
 # Lee el usuario de id especifico
 @router.get("/{id}/admin", response_model=UserRead, status_code=status.HTTP_200_OK,
@@ -82,23 +83,15 @@ def patch_user(user_data : UserUpdate,
                 session : Session = Depends(get_session),
                 actual_user : Users = Depends(current_user)):
     try:
-        statement = select(Users).where(Users.user_id == actual_user.user_id)
-        user_found = session.exec(statement).first()
+        # statement = select(Users).where(Users.user_id == actual_user.user_id)
+        user_found = session.get(Users, actual_user.user_id)
 
-        if user_found is None:
+        if not user_found:
             HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         
-        if user_data.username is not None:
-            user_found.username = user_data.username
-
-        if user_data.email is not None:
-            user_found.email = user_data.email
-        
-        if user_data.password is not None:
-            user_found.password = user_data.password
-        
-        if user_data.permission is not None:
-            user_found.permission = user_data.permission
+        user_data_dict = user_data.model_dump(exclude_unset=True)
+        for key, value in user_data_dict.items():
+            setattr(user_found, key, value)
 
         session.commit()
         return {"detail":"Usuario actualizado con exito"}
@@ -117,14 +110,11 @@ def update_user(user_id : int, user_data: UserUpdate, session : Session = Depend
         if user_found is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
         
-        if user_data.email is not None:
-            user_found.email = user_data.email
-        if user_data.password is not None:
-            user_found.password = encrypt_password(user_data.password)
-        if user_data.username is not None:
-            user_found.username = user_data.username
-        if user_data.permission is not None:
-            user_found.permission = user_data.permission
+        user_data_dict = user_data.dict()
+        for key, value in user_data_dict.items():
+            setattr(user_found, key, value)
+        
+        user_found.password = encrypt_password(user_data.password)
         session.commit()
         return {"detail":"El usuario fue actualizado"}
 
