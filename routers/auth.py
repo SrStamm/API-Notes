@@ -83,3 +83,10 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
 # Valida si el user esta acivo
 async def current_user(user: Users = Depends(auth_user)):      
     return user
+
+async def require_admin(user: Users = Depends(current_user)):
+    if user.permission is False:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})
+    
+    return user

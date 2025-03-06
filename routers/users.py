@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Path
-from Models.db_models import Users, UserRead, UserUpdate
+from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin
 from DB.database import Session, select, get_session
-from routers.auth import encrypt_password, current_user
+from routers.auth import encrypt_password, current_user, require_admin
 
 # Router
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -28,8 +28,7 @@ def read_me(user : UserRead = Depends(current_user)) -> UserRead:
             description="Obtiene un usuario segun el id indicado")
 def read_users_with_id(id: int = Path(ge=0),
                        session : Session = Depends(get_session)) -> UserRead:
-    statement = select(Users).where(Users.user_id == id)
-    results = session.exec(statement).first()
+    results = session.get(Users, id)
 
     if results is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
@@ -37,15 +36,11 @@ def read_users_with_id(id: int = Path(ge=0),
     return results
 
 # Lee el usuario de id especifico
-@router.get("/{id}/admin", response_model=UserRead, status_code=status.HTTP_200_OK,
+@router.get("/{id}/admin", response_model=UserReadAdmin, status_code=status.HTTP_200_OK,
             description="Obtiene el usuario indicado, pero muestra datos sensibles")
 def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depends(get_session),
-                                 actual_user : Users = Depends(current_user)) -> Users:
-    if actual_user.permission is False:
-        HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"error":"No estas autorizado"})
-
-    statement = select(Users).where(Users.user_id == id)
-    user_found = session.exec(statement).first()
+                                 actual_user : Users = Depends(require_admin)) -> UserReadAdmin:
+    user_found = session.get(Users, id)
 
     if user_found is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
@@ -135,17 +130,12 @@ def delete_actual_user(actual_user = Depends(current_user), session : Session = 
 
 # Elimina el usuario indicado por id
 @router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_actual_user(id_ : int, user = Depends(current_user), session : Session = Depends(get_session)):
-    if user.permission is True:
-        statement = select(Users).where(Users.user_id == id_)
-        resultado = session.exec(statement).first()
-
-        if resultado is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
-        
-        session.delete(resultado)
-        session.commit()
-        return {"detail" : "El usuario se ha eliminado con éxito"}
-    else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail={"error":"No estas autorizado para ejecutar esta accion"})
+def delete_actual_user(id_ : int, user = Depends(require_admin), session : Session = Depends(get_session)):
+    resultado = session.get(Users, id_)
+    
+    if resultado is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "No se ha encontrado el usario"})
+    
+    session.delete(resultado)
+    session.commit()
+    return {"detail" : "El usuario se ha eliminado con éxito"}

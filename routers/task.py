@@ -1,9 +1,9 @@
 import logging
 from fastapi import APIRouter, status, HTTPException, Depends, Path
 from sqlalchemy.exc import SQLAlchemyError
-from Models.db_models import Tasks, TaskRead, TaskUpdate, Users
-from DB.database import Session, engine, get_session, select
-from routers.auth import current_user
+from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags
+from DB.database import Session, get_session, select
+from routers.auth import current_user, require_admin
 from datetime import datetime
 
 # Configurar logging
@@ -30,13 +30,11 @@ def get_tasks_user(user = Depends(current_user), session : Session = Depends(get
 
 
 @router.get("/all")
-def get_tasks_all(user=Depends(current_user), session : Session = Depends(get_session),
-                   size : int = 10, offset : int = 0) -> list[Tasks]:
-    if not user.permission:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autorizado.")
-
+def get_tasks_all(user: Users = Depends(require_admin), session : Session = Depends(get_session),
+                   skip : int = 10, offset : int = 0) -> list[Tasks]:
+    
     try:
-        statement = select(Tasks).limit(size).offset(offset)
+        statement = select(Tasks).limit(skip).offset(offset)
         results = session.exec(statement).all()
         return results
     except SQLAlchemyError as e:
@@ -45,10 +43,14 @@ def get_tasks_all(user=Depends(current_user), session : Session = Depends(get_se
 
 
 @router.get("/{id}", status_code=status.HTTP_202_ACCEPTED, response_model=TaskRead)
-def tasks_search_id(id: int, user=Depends(current_user), session : Session = Depends(get_session)):
+def tasks_search_id(id: int, user=Depends(current_user), session : Session = Depends(get_session)) -> TaskRead:
     try:
-        statement = select(Tasks).where(Tasks.id == id, Tasks.user_id == user.user_id)
-        result = session.exec(statement).first()
+        # Hay dos formas de obtener el task:
+        result = session.get(Tasks, id)
+
+        # O la siguiente forma:
+            # statement = select(Tasks).where(Tasks.id == id, Tasks.user_id == user.user_id)
+            # result = session.exec(statement).first()
         
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
@@ -66,6 +68,7 @@ def create_task(task: Tasks, user=Depends(current_user), session : Session = Dep
         session.add(task)
         session.commit()
         return {"detail": "Se creó una nueva tarea."}
+    
     except SQLAlchemyError as e:
         logger.error(f"Error en create_task: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la tarea.")
@@ -83,8 +86,15 @@ def update_task(id: int, task: TaskUpdate,
         
         task_selected.text = task.text
         task_selected.category = task.category
+        
+        for key in task.tags:
+            result = session.select(Tags).where(Tags.tag == key)
+            if result is None:
+                session.add(key)
+        task_selected.tags = task.tags
         session.commit()
         return {"detail": "Tarea actualizada con éxito"}
+    
     except SQLAlchemyError as e:
         logger.error(f"Error en update_task: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"error":"Error al actualizar la tarea."})
@@ -93,8 +103,7 @@ def update_task(id: int, task: TaskUpdate,
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(id: int, user=Depends(current_user), session : Session = Depends(get_session)):
     try:
-        statement = select(Tasks).where(Tasks.id == id, Tasks.user_id == user.user_id)
-        result = session.exec(statement).first()
+        result = session.get(Tasks, id)
 
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
@@ -102,6 +111,7 @@ def delete_task(id: int, user=Depends(current_user), session : Session = Depends
         session.delete(result)
         session.commit()
         return {"detail": "Tarea eliminada exitosamente"}
+    
     except SQLAlchemyError as e:
         logger.error(f"Error en delete_task: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la tarea.")

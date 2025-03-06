@@ -1,0 +1,24 @@
+-- Alembic
+
+Una vez ya iniciado alembic, se debe:
+
+-- alembic revision -m <texto>
+Revisa los cambios y los guarda
+
+Aqui es donde se debe actualizar el archivo de actualizacion, para agregar o eliminar los cambios que queremos realizar
+Estos cambios deben de ser en:
+
+-- def upgrade():
+O
+-- def downgrade():
+
+Para actualizar o volver a una version anterior
+
+Para actualizar:
+-- alembic upgrade head
+
+Para volver a una version anterior
+-- alembic downgrade head
+
+Para ver el historial, 
+-- alembic history --verbose
