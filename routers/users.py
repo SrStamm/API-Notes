@@ -7,19 +7,26 @@ from routers.auth import encrypt_password, current_user, require_admin
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # Todos los usuarios disponibles
-@router.get("/", status_code=status.HTTP_200_OK,
-            description="Obtiene una lista de todos los usuarios, con limite de cantidad a mostrar")
+@router.get("/all-users/", status_code=status.HTTP_200_OK,
+            description="Obtiene una lista de todos los usuarios, con 'limit' y 'offset' para paginar.")
+
 def read_all_users(limit : int = 5,
                    offset: int = 0,
+                   username : str | None = None,
                    session : Session = Depends(get_session)) -> list[UserRead]:
 
     statement = select(Users).offset(offset).limit(limit)
+    
+    if username is not None:
+        statement.where(Users.username == username)
+
     user_found = session.exec(statement).all()
+    
     return user_found
 
 # Lee el usuario actual
 @router.get("/me", status_code=status.HTTP_200_OK,
-            description="Obtiene los datos del usuario actual")
+            description="Obtiene los datos del usuario logeado")
 def read_me(user : UserRead = Depends(current_user)) -> UserRead:
     return user
 
@@ -37,7 +44,7 @@ def read_users_with_id(id: int = Path(ge=0),
 
 # Lee el usuario de id especifico
 @router.get("/{id}/admin", response_model=UserReadAdmin, status_code=status.HTTP_200_OK,
-            description="Obtiene el usuario indicado, pero muestra datos sensibles")
+            description="Obtiene el usuario indicado, pero muestra datos sensibles. Requiere permisos de administrador")
 def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depends(get_session),
                                  actual_user : Users = Depends(require_admin)) -> UserReadAdmin:
     user_found = session.get(Users, id)
@@ -48,7 +55,7 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
 
 # Crea un nuevo usuario
 @router.post("/", status_code=status.HTTP_202_ACCEPTED,
-             description="Crea un nuevo usuario")
+             description="Crea un nuevo usuario. Necesita un username, email y password")
 def create_user(new_user : Users, session : Session = Depends(get_session)):
 
     statement = select(Users).where(Users.username == new_user.username)
@@ -73,7 +80,8 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
     return {"detail" : "Se creo un nuevo usuario."}
 
 # actualiza el usuario actual
-@router.patch("/me", status_code=status.HTTP_202_ACCEPTED)
+@router.patch("/me", status_code=status.HTTP_202_ACCEPTED,
+              description="Actualiza el usuario actual segun el campo alterado.")
 def patch_user(user_data : UserUpdate,
                 session : Session = Depends(get_session),
                 actual_user : Users = Depends(current_user)):
@@ -95,8 +103,12 @@ def patch_user(user_data : UserUpdate,
         HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar el usuario.")
 
 # Actualiza un usuario segun su ID
-@router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED)
-def update_user(user_id : int, user_data: UserUpdate, session : Session = Depends(get_session)):
+@router.put("/{user_id}", status_code=status.HTTP_202_ACCEPTED,
+            description="Actualiza un usuario con id especifico. Requiere permisos de administrador.")
+def update_user(user_id : int,
+                user_data: UserUpdate,
+                session : Session = Depends(get_session),
+                user = Depends(require_admin)):
     try:
         statement = select(Users).where(Users.user_id == user_id)
         user_found = session.exec(statement).first()
@@ -118,7 +130,8 @@ def update_user(user_id : int, user_data: UserUpdate, session : Session = Depend
 
 
 # Elimina el usuario actual
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT,
+               description="Elimina el usuario actual. Tambien se eliminan las tareas relacionadas al usuario.")
 def delete_actual_user(actual_user = Depends(current_user), session : Session = Depends(get_session)):
     try:
         session.delete(actual_user)
@@ -129,7 +142,8 @@ def delete_actual_user(actual_user = Depends(current_user), session : Session = 
         HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar el usuario")
 
 # Elimina el usuario indicado por id
-@router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{id_}", status_code=status.HTTP_204_NO_CONTENT,
+               description="Elimina el usuario de id especifico. Requiere permisos de administrador.")
 def delete_actual_user(id_ : int, user = Depends(require_admin), session : Session = Depends(get_session)):
     resultado = session.get(Users, id_)
     

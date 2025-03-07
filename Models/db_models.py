@@ -29,6 +29,7 @@ class UserRead(SQLModel):
     username : str
     email : str
 
+
 class UserReadAdmin(SQLModel):
     user_id : int 
     username : str
@@ -50,6 +51,9 @@ class Tags(SQLModel, table=True):
     tag: str
     tasks: List["Tasks"] = Relationship(back_populates="tags", link_model=tasks_tags_link)
 
+class read_tag(SQLModel):
+    tag: str
+
 class Tasks(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str
@@ -60,14 +64,32 @@ class Tasks(SQLModel, table=True):
     user: "Users" = Relationship(back_populates="tasks")
     tags: List["Tags"] = Relationship(back_populates="tasks", link_model=tasks_tags_link)
 
+    model_config = {
+        "json_schema_extra" : 
+        {
+            "examples" : 
+            [
+                {
+                    "id" : 0,
+                    "text" : "Hello World",
+                    "create_date" : "01-01-2000",
+                    "category" : "Study",
+                    "user_id" : 1,
+                    "tags" : ["Study","Easy"]
+                    
+                }
+            ]
+        }
+    }
+
 class TaskRead(SQLModel):
     id: int
     text : str
     category : str
-    tags : List[Tags]
+    tags : List[read_tag]
     user_id: int
 
 class TaskUpdate(SQLModel):
     text: str | None = None
     category: str = "Unknown"
-    tags : List[Tags] = None
+    tags : List[str] = None
