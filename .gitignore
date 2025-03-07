@@ -1,0 +1,15 @@
+Dockerfile
+./.vscode
+./.pytest_cache
+./__pycache__
+./alembic
+./venv
+.coverage
+Alembic_info.txt
+alembic.ini
+./DB/database.sqlite
+./DB/__pycache__
+./Models/__pycache__
+./routers/__pycache__
+.dockerignore
+requeriments.txt

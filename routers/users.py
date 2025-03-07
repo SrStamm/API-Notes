@@ -71,11 +71,9 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
     if results is not None:
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,
                                 detail={"error" : "Ya existe un usuario con este email"})
-    
+
+    new_user.password = encrypt_password(new_user.password)    
     session.add(new_user)
-    session.commit()
-    session.refresh(new_user)
-    new_user.password = encrypt_password(new_user.password)
     session.commit()
     return {"detail" : "Se creo un nuevo usuario."}
 

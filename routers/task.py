@@ -1,7 +1,7 @@
 import logging
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
-from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags
+from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags, tasks_tags_link
 from DB.database import Session, get_session, select
 from routers.auth import current_user, require_admin
 from datetime import datetime
@@ -22,18 +22,20 @@ def get_tasks_user(
                    session : Session = Depends(get_session),
                    limit : int = 10,
                    offset: int = 0,
+                   tags: list[str] = Query(None),
                    order_by_date: str = None) -> list[TaskRead]:
     try:
         statement = select(Tasks).where(Tasks.user_id == user.user_id).limit(limit).offset(offset)
 
-        # Ordena segun la fecha de creacion, de forma ascendente o descendente
-        if order_by_date is not None:
-            if order_by_date == 'ASC':
-                statement = statement.order_by(Tasks.create_date.asc())
-            elif order_by_date == 'DESC':
-                statement = statement.order_by(Tasks.create_date.desc())
-            else:
-                pass
+        # -- filtrado por tags
+        if tags is not None:
+            statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags))
+
+        # -- ordena segun la fecha de creacion, de forma ascendente o descendente
+        if order_by_date == 'ASC':
+            statement = statement.order_by(Tasks.create_date.asc())
+        elif order_by_date == 'DESC':
+            statement = statement.order_by(Tasks.create_date.desc())
         
         results = session.exec(statement).all()
         return results
