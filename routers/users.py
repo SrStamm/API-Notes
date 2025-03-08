@@ -43,7 +43,7 @@ def read_users_with_id(id: int = Path(ge=0),
     return results
 
 # Lee el usuario de id especifico
-@router.get("/{id}/admin", response_model=UserReadAdmin, status_code=status.HTTP_200_OK,
+@router.get("/{id}/admin/", response_model=UserReadAdmin, status_code=status.HTTP_200_OK,
             description="Obtiene el usuario indicado, pero muestra datos sensibles. Requiere permisos de administrador")
 def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depends(get_session),
                                  actual_user : Users = Depends(require_admin)) -> UserReadAdmin:

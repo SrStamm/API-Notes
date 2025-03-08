@@ -85,7 +85,7 @@ async def current_user(user: Users = Depends(auth_user)):
     return user
 
 async def require_admin(user: Users = Depends(current_user)):
-    if user.permission is False:
+    if user.role == 'user':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})
     

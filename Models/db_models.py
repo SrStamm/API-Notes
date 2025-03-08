@@ -3,17 +3,13 @@ from datetime import date
 from typing import List
 from enum import Enum
 
-class Role(SQLModel, Enum):
-    Admin = 'Admin'
-    User = 'User'
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")
     username : str
     email : str 
     disabled : bool = Field(default=False, description="Cuenta desactivada")
     password : str 
-    permission : bool = Field(default=False, description="Permisos de admin")
-    role : Role = Field(default='User')
+    role : str = Field(default='user', description="Se asigna el rol que se puede tener (admin, user)")
 
     tasks : List["Tasks"] = Relationship(back_populates="user", cascade_delete=True)
 
