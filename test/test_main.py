@@ -18,14 +18,14 @@ def auth_headers():
     return {"Authorization": f"Bearer {token}"}
 
 def test_get_user_me(auth_headers):
-    response = client.get("/users/me", headers=auth_headers)  
+    response = client.get("/users/me", headers=auth_headers)
     assert response.status_code == 200
     user_data = response.json()
     assert all(key in user_data for key in ["username","email","user_id"])
     assert response.json() == {"username": "mirko_dev", "email":"mirko@dev.com", "user_id":1}
 
 def test_get_user_all(auth_headers):
-    response = client.get("/users/", headers=auth_headers)
+    response = client.get("/users/all-users/", headers=auth_headers)
     assert response.status_code == 200
     users = response.json()
     assert isinstance(users, list)    

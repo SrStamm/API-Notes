@@ -80,7 +80,7 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
 # actualiza el usuario actual
 @router.patch("/me", status_code=status.HTTP_202_ACCEPTED,
               description="Actualiza el usuario actual segun el campo alterado.")
-def patch_user(user_data : UserUpdate,
+def patch_user( user_data : UserUpdate,
                 session : Session = Depends(get_session),
                 actual_user : Users = Depends(current_user)):
     try:
