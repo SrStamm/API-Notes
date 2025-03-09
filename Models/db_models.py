@@ -1,7 +1,6 @@
 from sqlmodel import Field, SQLModel, Relationship
 from datetime import date
 from typing import List
-from enum import Enum
 
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")

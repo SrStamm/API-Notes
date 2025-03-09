@@ -23,9 +23,43 @@ def get_tasks_user(
                    limit : int = 10,
                    offset: int = 0,
                    tags: list[str] = Query(None),
+                   category : str = 'All',
                    order_by_date: str = None) -> list[TaskRead]:
     try:
-        statement = select(Tasks).where(Tasks.user_id == user.user_id).limit(limit).offset(offset)
+        statement = select(Tasks).where(Tasks.user_id == user.user_id)
+
+        if category != 'All':
+            statement.where(Tasks.category == category)
+
+        # -- filtrado por tags
+        if tags:
+            statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags))
+
+        # -- ordena segun la fecha de creacion, de forma ascendente o descendente
+        if order_by_date == 'ASC':
+            statement = statement.order_by(Tasks.create_date.asc())
+        elif order_by_date == 'DESC':
+            statement = statement.order_by(Tasks.create_date.desc())
+
+        results = session.exec(statement.limit(limit).offset(offset)).all()
+        return results
+
+    except SQLAlchemyError as e:
+        logger.error(f"Error en get_tasks_user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
+
+
+@router.get("/all/", description="Obtienes todas las notas de todos los usuarios.\n Requiere permiso de administrador")
+def get_tasks_all(
+                  user = Depends(require_admin),
+                  session : Session = Depends(get_session),
+                  skip : int = 10,
+                  offset : int = 0,
+                  tags: list[str] = Query(None),
+                  order_by_date: str = None) -> list[Tasks]:
+
+    try:
+        statement = select(Tasks).limit(skip).offset(offset)
 
         # -- filtrado por tags
         if tags is not None:
@@ -36,23 +70,7 @@ def get_tasks_user(
             statement = statement.order_by(Tasks.create_date.asc())
         elif order_by_date == 'DESC':
             statement = statement.order_by(Tasks.create_date.desc())
-        
-        results = session.exec(statement).all()
-        return results
 
-    except SQLAlchemyError as e:
-        logger.error(f"Error en get_tasks_user: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
-
-
-@router.get("/all", description="Obtienes todas las notas de todos los usuarios.\n Requiere permiso de administrador")
-def get_tasks_all(
-                  user = Depends(require_admin),
-                  session : Session = Depends(get_session),
-                  skip : int = 10, offset : int = 0) -> list[Tasks]:
-
-    try:
-        statement = select(Tasks).limit(skip).offset(offset)
         results = session.exec(statement).all()
         return results
     
@@ -80,7 +98,7 @@ def tasks_search_id(id: int, user = Depends(require_admin), session : Session = 
              description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
 def create_task(task: Tasks, user=Depends(current_user), session : Session = Depends(get_session)):
     try:
-        task = Tasks(**task.model_dump(exclude={"create_date"}), user=user, create_date=datetime.now())
+        task = Tasks(**task.model_dump(exclude={"create_date"}), user=user, create_date=datetime.now(), create_hour=datetime.now().strftime('%H:%M'))
         session.add(task)
         session.commit()
         return {"detail": "Se creó una nueva tarea."}
