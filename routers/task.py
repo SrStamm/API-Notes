@@ -6,6 +6,8 @@ from DB.database import Session, get_session, select
 from routers.auth import current_user, require_admin
 from datetime import datetime
 
+from sqlmodel import func
+
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -22,18 +24,23 @@ def get_tasks_user(
                    session : Session = Depends(get_session),
                    limit : int = 10,
                    offset: int = 0,
-                   tags: list[str] = Query(None),
-                   category : str = 'All',
+                   tags_searched: list[str] = Query(default=None),
+                   category_searched : str = Query(default=None),
                    order_by_date: str = None) -> list[TaskRead]:
     try:
         statement = select(Tasks).where(Tasks.user_id == user.user_id)
-
-        if category != 'All':
-            statement.where(Tasks.category == category)
-
+        
         # -- filtrado por tags
-        if tags:
-            statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags))
+        if not tags_searched:
+            pass
+        else:
+            # statement = statement.join_from(Tasks, tasks_tags_link, Tasks.id == tasks_tags_link.task_id).join_from(tasks_tags_link, Tags, Tags.id == tasks_tags_link.tag_id).where(tags.tag in tags)
+            statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags_searched)).group_by(Tasks.id).having(func.count(Tags.id) == len(tags_searched))
+        
+        if not category_searched:
+            pass
+        else:
+            statement = statement.where(Tasks.category == category_searched)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
         if order_by_date == 'ASC':
@@ -55,15 +62,23 @@ def get_tasks_all(
                   session : Session = Depends(get_session),
                   skip : int = 10,
                   offset : int = 0,
-                  tags: list[str] = Query(None),
+                  tags_searched: list[str] = Query(default=None),
+                  category_searched : str = Query(default=None),
                   order_by_date: str = None) -> list[Tasks]:
 
     try:
         statement = select(Tasks).limit(skip).offset(offset)
 
         # -- filtrado por tags
-        if tags is not None:
-            statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags))
+        if not tags_searched:
+            pass
+        else:
+            statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags_searched)).group_by(Tasks.id).having(func.count(Tags.id) == len(tags_searched))
+
+        if not category_searched:
+            pass
+        else:
+            statement = statement.where(Tasks.category == category_searched)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
         if order_by_date == 'ASC':

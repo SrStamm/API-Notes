@@ -12,7 +12,7 @@ router = APIRouter(prefix="/login", tags=["Authentication"])
 ALGORITHM = "HS256"
 
 # Definimos la duracion del TOKEN
-ACCESS_TOKEN_DURATION = 30
+ACCESS_TOKEN_DURATION = 60
 
 # Definimos una llave secreta
 SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"

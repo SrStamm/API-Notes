@@ -86,8 +86,11 @@ class TaskRead(SQLModel):
     id: int
     text : str
     category : str
-    tags : List[read_tag]
+    tags : list[read_tag]
     user_id: int
+
+    class Config:
+        orm_mode = True
 
 class TaskUpdate(SQLModel):
     text: str | None = None
