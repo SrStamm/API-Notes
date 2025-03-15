@@ -16,7 +16,7 @@ def create_db_and_tables():
             result = connection.execute("SELECT 1")
             print(f"Connected to PostgreSQL: {result.fetchone()}")
     except Exception as e:
-        print(f"Error connecting to the database: {e}")
+        raise {"Error connecting to the database":{e}}
 
 def get_session():
     session = Session(engine)

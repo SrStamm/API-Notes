@@ -16,16 +16,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
-@router.get("/", status_code=status.HTTP_200_OK,
-            description="Obtiene todas las notas del usuario. Tienes varias opciones para filtrado y ordenado.")
+@router.get("/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
 def get_tasks_user(
                    user = Depends(current_user),
                    session : Session = Depends(get_session),
-                   limit : int = Query(10, description="Limita la cantidad de resultados a recibir"),
+                   limit : int = Query(10, description="Indica la cantidad de resultados a recibir"),
                    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
                    tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
                    category_searched : str = Query(default=None, description='Indica una categoria para la busqueda'),
-                   order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendete (ASC) o descendente (DESC)')) -> list[TaskRead]:
+                   category_order_by: str = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
+                   order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)')) -> list[TaskRead]:
+    
     try:
         statement = select(Tasks).where(Tasks.user_id == user.user_id)
         
@@ -36,6 +37,12 @@ def get_tasks_user(
         # -- filtrado por categoria
         if category_searched:
             statement = statement.where(Tasks.category == category_searched)
+
+        # -- ordena segun la categoria, de forma ascendente o descendente
+        if category_order_by == 'ASC':
+            statement = statement.order_by(Tasks.category.asc())
+        elif category_order_by == 'DESC':
+            statement = statement.order_by(Tasks.category.desc())
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
         if order_by_date == 'ASC':
@@ -53,7 +60,7 @@ def get_tasks_user(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
 
-@router.get("/all/", description="Obtienes todas las notas de todos los usuarios.\n Requiere permiso de administrador")
+@router.get("/admin/all/", description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador")
 def get_tasks_all(
                   user = Depends(require_admin),
                   session : Session = Depends(get_session),
@@ -88,7 +95,7 @@ def get_tasks_all(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
 
-@router.get("/{id}", status_code=status.HTTP_202_ACCEPTED, response_model=TaskRead, 
+@router.get("/admin/{id}", status_code=status.HTTP_200_OK, response_model=TaskRead, 
             description="Obtiene la nota con id especifico. Requiere permiso de administrador")
 def tasks_search_id(id: int,
                     user = Depends(require_admin),
@@ -106,14 +113,16 @@ def tasks_search_id(id: int,
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED,
-             description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
+@router.post("/", status_code=status.HTTP_201_CREATED, description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
 def create_task(task: Tasks,
                 user=Depends(current_user),
                 session : Session = Depends(get_session)):
     
     try:
-        task = Tasks(**task.model_dump(exclude={"create_date"}), user=user, create_date=datetime.now(), create_hour=datetime.now().strftime('%H:%M'))
+        task = Tasks(**task.model_dump(exclude={"create_date"}),
+                     user=user,
+                     create_date=datetime.now())
+        
         session.add(task)
         session.commit()
         return {"detail": "Se creó una nueva tarea."}
@@ -164,7 +173,27 @@ def update_task(
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, description="Elimina una tarea con id especifico")
 def delete_task(id: int,
-                user=Depends(current_user),
+                user = Depends(current_user),
+                session : Session = Depends(get_session)):
+
+    try:
+        result = session.exec(select(Tasks).where(Tasks.id == id, Tasks.user_id == user.user_id)).first()
+
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
+
+        session.delete(result)
+        session.commit()
+        return {"detail": "Tarea eliminada exitosamente"}
+    
+    except SQLAlchemyError as e:
+        logger.error(f"Error en delete_task: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la tarea.")
+    
+
+@router.delete("/admin/{id}", status_code=status.HTTP_204_NO_CONTENT, description="Elimina una tarea con id especifico")
+def delete_task(id: int,
+                user = Depends(require_admin),
                 session : Session = Depends(get_session)):
 
     try:
@@ -175,7 +204,7 @@ def delete_task(id: int,
 
         session.delete(result)
         session.commit()
-        return {"detail": "Tarea eliminada exitosamente"}
+        return {"status": status.HTTP_204_NO_CONTENT}
     
     except SQLAlchemyError as e:
         logger.error(f"Error en delete_task: {str(e)}")

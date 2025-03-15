@@ -64,14 +64,11 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session =
 
     if user_found is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail="Usuario no encontrado o no existe")
+                            detail={"detail":"Usuario no encontrado o no existe"})
     
     # Caso no tenga el mismo password, da error
     if not crypt.verify(form.password, user_found.password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña incorrecta")
-
-    if user_found.disabled is True:
-        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="Usuario inactivo")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"detail":"Contraseña incorrecta"})
 
     access_token = {"sub": user_found.username,
                     "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)}
@@ -80,12 +77,13 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session =
     return {"access_token" : jwt.encode(access_token, SECRET, algorithm=ALGORITHM), "token_type" : "bearer"}
 
 # Valida si el user esta acivo
-async def current_user(user: Users = Depends(auth_user)):      
+async def current_user(user: Users = Depends(auth_user)):
+    if user.disabled is True:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"detail":"Usuario inactivo"})
     return user
 
 async def require_admin(user: Users = Depends(current_user)):
     if user.role == 'user':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})
-    
+                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})    
     return user

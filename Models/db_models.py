@@ -2,6 +2,10 @@ from sqlmodel import Field, SQLModel, Relationship
 from datetime import date
 from typing import List
 
+from passlib.context import CryptContext
+
+# Contexto de encriptacion 
+crypt = CryptContext(schemes=["bcrypt"])
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")
     username : str
@@ -12,6 +16,11 @@ class Users(SQLModel, table=True):
 
     tasks : List["Tasks"] = Relationship(back_populates="user", cascade_delete=True)
 
+    def encrypt_password(password : str):
+        password = password.encode()
+        return crypt.hash(password)
+    
+    
     model_config = {
         "json_schema_extra" : {
             "examples" : [
