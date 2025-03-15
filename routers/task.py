@@ -17,29 +17,24 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.get("/", status_code=status.HTTP_200_OK,
-            description="Obtiene todas las notas del usuario. Puedes usar 'limit' y 'offset' para paginar las notas.\n"
-            "Tambien 'order_by_date' para ordenar por fecha de forma ascendente ('ASC') o descendente ('DESC').")
+            description="Obtiene todas las notas del usuario. Tienes varias opciones para filtrado y ordenado.")
 def get_tasks_user(
                    user = Depends(current_user),
                    session : Session = Depends(get_session),
-                   limit : int = 10,
-                   offset: int = 0,
-                   tags_searched: list[str] = Query(default=None),
-                   category_searched : str = Query(default=None),
-                   order_by_date: str = None) -> list[TaskRead]:
+                   limit : int = Query(10, description="Limita la cantidad de resultados a recibir"),
+                   offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
+                   tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
+                   category_searched : str = Query(default=None, description='Indica una categoria para la busqueda'),
+                   order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendete (ASC) o descendente (DESC)')) -> list[TaskRead]:
     try:
         statement = select(Tasks).where(Tasks.user_id == user.user_id)
         
         # -- filtrado por tags
-        if not tags_searched:
-            pass
-        else:
-            # statement = statement.join_from(Tasks, tasks_tags_link, Tasks.id == tasks_tags_link.task_id).join_from(tasks_tags_link, Tags, Tags.id == tasks_tags_link.tag_id).where(tags.tag in tags)
+        if tags_searched:
             statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags_searched)).group_by(Tasks.id).having(func.count(Tags.id) == len(tags_searched))
-        
-        if not category_searched:
-            pass
-        else:
+       
+        # -- filtrado por categoria
+        if category_searched:
             statement = statement.where(Tasks.category == category_searched)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
@@ -48,7 +43,9 @@ def get_tasks_user(
         elif order_by_date == 'DESC':
             statement = statement.order_by(Tasks.create_date.desc())
 
+        # -- devuelve todos los resultados que cumplan los requisitos
         results = session.exec(statement.limit(limit).offset(offset)).all()
+        
         return results
 
     except SQLAlchemyError as e:
@@ -60,24 +57,21 @@ def get_tasks_user(
 def get_tasks_all(
                   user = Depends(require_admin),
                   session : Session = Depends(get_session),
-                  skip : int = 10,
-                  offset : int = 0,
-                  tags_searched: list[str] = Query(default=None),
-                  category_searched : str = Query(default=None),
+                  limit : int = Query(10, description='Indica el limite de resultados a recibir'),
+                  offset : int = Query(0, description='Indica cuantos resultados se va a saltar antes de devolver'),
+                  tags_searched: list[str] = Query(None, description='Recibe una lista de tags para la busqueda'),
+                  category_searched : str = Query(None, description='Indica la categoria para solo buscar por ese valor'),
                   order_by_date: str = None) -> list[Tasks]:
 
     try:
-        statement = select(Tasks).limit(skip).offset(offset)
+        statement = select(Tasks).limit(limit).offset(offset)
 
         # -- filtrado por tags
-        if not tags_searched:
-            pass
-        else:
+        if tags_searched:
             statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags_searched)).group_by(Tasks.id).having(func.count(Tags.id) == len(tags_searched))
 
-        if not category_searched:
-            pass
-        else:
+        # -- busqueda con categoria designada
+        if category_searched:
             statement = statement.where(Tasks.category == category_searched)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
@@ -96,12 +90,15 @@ def get_tasks_all(
 
 @router.get("/{id}", status_code=status.HTTP_202_ACCEPTED, response_model=TaskRead, 
             description="Obtiene la nota con id especifico. Requiere permiso de administrador")
-def tasks_search_id(id: int, user = Depends(require_admin), session : Session = Depends(get_session)) -> TaskRead:
+def tasks_search_id(id: int,
+                    user = Depends(require_admin),
+                    session : Session = Depends(get_session)) -> TaskRead:
     try:
         result = session.get(Tasks, id)
         
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
+        
         return result
     
     except SQLAlchemyError as e:
@@ -111,7 +108,10 @@ def tasks_search_id(id: int, user = Depends(require_admin), session : Session = 
 
 @router.post("/", status_code=status.HTTP_201_CREATED,
              description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
-def create_task(task: Tasks, user=Depends(current_user), session : Session = Depends(get_session)):
+def create_task(task: Tasks,
+                user=Depends(current_user),
+                session : Session = Depends(get_session)):
+    
     try:
         task = Tasks(**task.model_dump(exclude={"create_date"}), user=user, create_date=datetime.now(), create_hour=datetime.now().strftime('%H:%M'))
         session.add(task)
@@ -128,6 +128,7 @@ def update_task(
                 id: int, task: TaskUpdate,
                 user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
+    
     try:
         statement = select(Tasks).where(Tasks.id == id, Tasks.user_id == user.user_id)
         task_selected = session.exec(statement).first()
@@ -135,10 +136,10 @@ def update_task(
         if task_selected is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
         
-        if task.text is not None:
+        if task.text:
             task_selected.text = task.text
 
-        if task.category is not None:
+        if task.category:
             task_selected.category = task.category
         
         if task.tags: # Procesa los tags solo si se proporciona una lista en task.tags
@@ -162,7 +163,10 @@ def update_task(
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, description="Elimina una tarea con id especifico")
-def delete_task(id: int, user=Depends(current_user), session : Session = Depends(get_session)):
+def delete_task(id: int,
+                user=Depends(current_user),
+                session : Session = Depends(get_session)):
+
     try:
         result = session.get(Tasks, id)
 
