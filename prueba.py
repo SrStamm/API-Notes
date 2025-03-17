@@ -27,7 +27,7 @@ app.include_router(users.router)
 app.include_router(auth.router)
 
 # Base
-@app.get("/", include_in_schema=False)
+@app.get("/", include_in_schema=False, status_code=200)
 def root():
     return {"messaje":"Bienvenido! Mira todas las tareas pendientes."}
 

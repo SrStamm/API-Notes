@@ -24,7 +24,7 @@ def get_tasks_user(
                    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
                    tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
                    category_searched : str = Query(default=None, description='Indica una categoria para la busqueda'),
-                   category_order_by: str = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
+                   order_by_category: str = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
                    order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)')) -> list[TaskRead]:
     
     try:
@@ -32,25 +32,28 @@ def get_tasks_user(
         
         # -- filtrado por tags
         if tags_searched:
-            statement = statement.join(tasks_tags_link).join(Tags).where(Tags.tag.in_(tags_searched)).group_by(Tasks.id).having(func.count(Tags.id) == len(tags_searched))
+            statement = (statement.join(tasks_tags_link, Tasks.id == tasks_tags_link.task_id)
+                         .join(Tags, tasks_tags_link.tag_id == Tags.id)
+                         .group_by(Tasks.id)
+                         .having(func.count(Tags.id) == len(tags_searched)) # -- Solo las tareas que tengan todos los tags
+                         )
        
         # -- filtrado por categoria
         if category_searched:
             statement = statement.where(Tasks.category == category_searched)
 
-        # -- ordena segun la categoria, de forma ascendente o descendente
-        if category_order_by == 'ASC':
-            statement = statement.order_by(Tasks.category.asc())
-        elif category_order_by == 'DESC':
-            statement = statement.order_by(Tasks.category.desc())
+        # -- ordena segun la categoria
+        if order_by_category:
+            # En caso de que se pase un valor distinto a 'ASC', se ordena de forma descendente
+            order_func = Tasks.category.asc() if order_by_category.upper() == "ASC" else Tasks.category.desc()
+            statement = statement.order_by(order_func)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
-        if order_by_date == 'ASC':
-            statement = statement.order_by(Tasks.create_date.asc())
-        elif order_by_date == 'DESC':
-            statement = statement.order_by(Tasks.create_date.desc())
+        if order_by_date:
+            order_func = Tasks.create_date.asc() if order_by_date.upper() == "ASC" else Tasks.create_date.desc()
+            statement = statement.order_by(order_func)
 
-        # -- devuelve todos los resultados que cumplan los requisitos
+        # -- Resultados de la busqueda
         results = session.exec(statement.limit(limit).offset(offset)).all()
         
         return results
@@ -60,7 +63,9 @@ def get_tasks_user(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
 
-@router.get("/admin/all/", description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador")
+@router.get("/admin/all/",
+            description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador",
+            status_code=status.HTTP_200_OK)
 def get_tasks_all(
                   user = Depends(require_admin),
                   session : Session = Depends(get_session),
@@ -82,10 +87,9 @@ def get_tasks_all(
             statement = statement.where(Tasks.category == category_searched)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
-        if order_by_date == 'ASC':
-            statement = statement.order_by(Tasks.create_date.asc())
-        elif order_by_date == 'DESC':
-            statement = statement.order_by(Tasks.create_date.desc())
+        if order_by_date:
+            order_func = Tasks.create_date.asc() if order_by_date.upper() == "ASC" else Tasks.create_date.desc()
+            statement = statement.order_by(order_func)
 
         results = session.exec(statement).all()
         return results
