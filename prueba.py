@@ -1,10 +1,14 @@
 # Crear una API de tareas pendientes
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from routers import task, users, auth
 from DB.database import create_db_and_tables
-
 from fastapi_pagination import Page, add_pagination
+import logging
+# Configurar logging
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 # Inicializa la app
 app = FastAPI(
@@ -30,6 +34,13 @@ app.include_router(auth.router)
 @app.get("/", include_in_schema=False, status_code=200)
 def root():
     return {"messaje":"Bienvenido! Mira todas las tareas pendientes."}
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor"}
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

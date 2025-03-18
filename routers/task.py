@@ -1,13 +1,12 @@
-import logging
 from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
 from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags, tasks_tags_link
 from DB.database import Session, get_session, select
 from routers.auth import current_user, require_admin
 from datetime import datetime
-
 from sqlmodel import func
 
+import logging
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ def get_tasks_user(
             statement = (statement.join(tasks_tags_link, Tasks.id == tasks_tags_link.task_id)
                          .join(Tags, tasks_tags_link.tag_id == Tags.id)
                          .group_by(Tasks.id)
-                         .having(func.count(Tags.id) == len(tags_searched)) # -- Solo las tareas que tengan todos los tags
+                         .having(func.count(Tags.id) >= len(tags_searched)) # -- Solo las tareas que tengan todos los tags
                          )
        
         # -- filtrado por categoria
@@ -109,9 +108,8 @@ def tasks_search_id(id: int,
         
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la tarea.")
-        
         return result
-    
+
     except SQLAlchemyError as e:
         logger.error(f"Error en tasks_search_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
@@ -172,10 +170,10 @@ def update_task(
     
     except SQLAlchemyError as e:
         logger.error(f"Error en update_task: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"error":"Error al actualizar la tarea."})
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar la tarea.")
 
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, description="Elimina una tarea con id especifico")
+@router.delete("/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una tarea con id especifico")
 def delete_task(id: int,
                 user = Depends(current_user),
                 session : Session = Depends(get_session)):
@@ -195,7 +193,7 @@ def delete_task(id: int,
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la tarea.")
     
 
-@router.delete("/admin/{id}", status_code=status.HTTP_204_NO_CONTENT, description="Elimina una tarea con id especifico")
+@router.delete("/admin/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una tarea con id especifico")
 def delete_task(id: int,
                 user = Depends(require_admin),
                 session : Session = Depends(get_session)):
@@ -208,7 +206,7 @@ def delete_task(id: int,
 
         session.delete(result)
         session.commit()
-        return {"status": status.HTTP_204_NO_CONTENT}
+        return {"detail": "Tarea eliminada exitosamente"}
     
     except SQLAlchemyError as e:
         logger.error(f"Error en delete_task: {str(e)}")
