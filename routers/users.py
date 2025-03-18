@@ -55,7 +55,7 @@ def read_users_with_id(id: int = Path(ge=0),
         
         return results
     
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en read_users_with_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al obtener el usuario")
 
@@ -70,7 +70,7 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
         return user_found
     
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en read_users_with_id_for_admin: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al obtener el usuario")
 
@@ -97,7 +97,7 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
         session.commit()
         return {"detail" : "Se creo un nuevo usuario."}
     
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en create_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear el usuario.")
 
@@ -123,7 +123,7 @@ def patch_user( user_data : UserUpdate,
         session.commit()
         return {"detail":"Usuario actualizado con exito"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en patch_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar el usuario.")
 
@@ -150,7 +150,7 @@ def update_user(user_id : int,
         session.commit()
         return {"detail":"El usuario fue actualizado"}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en update_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar el usuario.")
 
@@ -164,7 +164,7 @@ def delete_actual_user(actual_user = Depends(current_user), session : Session = 
         session.commit()
         return {"detail":"Usuario eliminado con éxito."}
 
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en delete_actual_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar el usuario")
 
@@ -184,6 +184,6 @@ def delete_actual_user(id_ : int,
         session.commit()
         return status.HTTP_204_NO_CONTENT
     
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.error(f"Error en delete_actual_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar el usuario")
