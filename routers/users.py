@@ -1,8 +1,8 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Path, Query
-from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin
+from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin, UserCreate
 from DB.database import Session, select, get_session, or_
 from sqlalchemy.exc import SQLAlchemyError
-from routers.auth import current_user, require_admin
+from routers.auth import current_user, require_admin, encrypt_password
 import logging
 
 # Configurar logging
@@ -77,7 +77,7 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
 # Crea un nuevo usuario
 @router.post("/", status_code=status.HTTP_202_ACCEPTED,
              description="Crea un nuevo usuario. OBLIGATORIO: username, email y password")
-def create_user(new_user : Users, session : Session = Depends(get_session)):
+def create_user(new_user : UserCreate, session : Session = Depends(get_session)):
     
     try:
         results = session.exec(select(Users).where(or_(Users.username == new_user.username, Users.email == new_user.email))).first()
@@ -91,9 +91,9 @@ def create_user(new_user : Users, session : Session = Depends(get_session)):
                                     detail="Ya existe un usuario con este email")
 
         # Encripta la contraseña
-        new_user.password = Users.encrypt_password(new_user.password)
-        
-        session.add(new_user)
+        # new_user.password = Users.encrypt_password(new_user.password)
+        db_user = Users(**new_user.model_dump())
+        session.add(db_user)
         session.commit()
         return {"detail" : "Se creo un nuevo usuario."}
     
@@ -111,15 +111,18 @@ def patch_user( user_data : UserUpdate,
         if not actual_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
         
-        # Actualiza los campos del usuario
-        user_data_dict = user_data.model_dump(exclude_unset=True)
-        for key, value in user_data_dict.items():
+        # Informacion a actualizar
+        update_user = user_data.model_dump(exclude_unset=True)
+        
+        # Encripta la contraseña, si es que se ha cambiado
+        if 'password' in update_user:
+            update_user['password'] = encrypt_password(update_user['password'])
+
+        # Obtiene los datos a actualizar
+        for key, value in update_user.items():
             setattr(actual_user, key, value)
 
-        # Encripta la contraseña, si es que se ha cambiado
-        if user_data.password:
-            actual_user.password = Users.encrypt_password(user_data.password)
-
+        session.add(actual_user)
         session.commit()
         return {"detail":"Usuario actualizado con exito"}
 

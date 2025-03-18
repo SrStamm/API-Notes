@@ -11,5 +11,7 @@ alembic.ini
 ./DB/__pycache__
 ./Models/__pycache__
 ./routers/__pycache__
+./test/__pycache__
 .dockerignore
 requeriments.txt
+
