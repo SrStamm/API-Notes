@@ -117,6 +117,14 @@ class TaskRead(SQLModel):
     tags : List[read_tag]
     user_id: int
 
+class TaskReadAdmin(SQLModel):
+    id: int
+    text : str
+    create_date : date
+    category : str
+    tags : List[read_tag]
+    user_id: int
+
 class TaskUpdate(SQLModel):
     text: str | None = None
     category: str | None = None

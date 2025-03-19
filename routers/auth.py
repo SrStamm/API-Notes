@@ -64,11 +64,11 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session =
 
     if user_found is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail={"detail":"Usuario no encontrado o no existe"})
+                            detail="Usuario no encontrado o no existe")
     
     # Caso no tenga el mismo password, da error
     if not crypt.verify(form.password, user_found.password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"detail":"Contraseña incorrecta"})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña incorrecta")
 
     access_token = {"sub": user_found.username,
                     "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)}

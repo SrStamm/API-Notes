@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Path, Query
-from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin, UserCreate
+from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin, UserCreate, UserUpdateAdmin
 from DB.database import Session, select, get_session, or_
 from sqlalchemy.exc import SQLAlchemyError
 from routers.auth import current_user, require_admin, encrypt_password
@@ -60,7 +60,8 @@ def read_users_with_id(id: int = Path(ge=0),
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al obtener el usuario")
 
 # Lee el usuario de id especifico
-@router.get("/admin/{id}", response_model=UserReadAdmin, status_code=status.HTTP_200_OK,
+@router.get("/admin/{id}", response_model=UserReadAdmin,
+            status_code=status.HTTP_200_OK,
             description="Obtiene el usuario indicado, pero muestra datos sensibles. Requiere permisos de administrador")
 def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depends(get_session),
                                  actual_user : Users = Depends(require_admin)) -> UserReadAdmin:
@@ -134,7 +135,7 @@ def patch_user( user_data : UserUpdate,
 @router.put("/admin/{user_id}", status_code=status.HTTP_202_ACCEPTED,
             description="Actualiza un usuario con id especifico por completo. Requiere permisos de administrador.")
 def update_user(user_id : int,
-                user_data: UserUpdate,
+                user_data: UserUpdateAdmin,
                 session : Session = Depends(get_session),
                 user = Depends(require_admin)):
     try:
@@ -144,12 +145,18 @@ def update_user(user_id : int,
         if not user_found:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
         
-        # Actualiza los campos del usuario
-        user_data_dict = user_data.model_dump(exclude_unset=True)
-        for key, value in user_data_dict.items():
+        # Informacion a actualizar
+        update_user = user_data.model_dump(exclude_unset=True)
+        
+        # Encripta la contraseña, si es que se ha cambiado
+        if 'password' in update_user:
+            update_user['password'] = encrypt_password(update_user['password'])
+
+        # Obtiene los datos a actualizar
+        for key, value in update_user.items():
             setattr(user_found, key, value)
         
-        user_found.password = Users.encrypt_password(user_data.password)
+        session.add(user_found)
         session.commit()
         return {"detail":"El usuario fue actualizado"}
 

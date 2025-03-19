@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
-from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags, tasks_tags_link
+from Models.db_models import Tasks, TaskRead, TaskUpdate, Users, Tags, tasks_tags_link, TaskReadAdmin
 from DB.database import Session, get_session, select
 from routers.auth import current_user, require_admin
 from datetime import datetime
@@ -22,7 +22,7 @@ def get_tasks_user(
                    limit : int = Query(10, description="Indica la cantidad de resultados a recibir"),
                    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
                    tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
-                   category_searched : str = Query(default=None, description='Indica una categoria para la busqueda'),
+                   category_searched: str = Query(default=None, description='Indica una categoria para la busqueda'),
                    order_by_category: str = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
                    order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)')) -> list[TaskRead]:
     
@@ -34,7 +34,7 @@ def get_tasks_user(
             statement = (statement.join(tasks_tags_link, Tasks.id == tasks_tags_link.task_id)
                          .join(Tags, tasks_tags_link.tag_id == Tags.id)
                          .group_by(Tasks.id)
-                         .having(func.count(Tags.id) >= len(tags_searched)) # -- Solo las tareas que tengan todos los tags
+                         .having(func.count(Tags.id) == len(tags_searched)) # -- Solo las tareas que tengan todos los tags
                          )
        
         # -- filtrado por categoria
@@ -65,14 +65,14 @@ def get_tasks_user(
 @router.get("/admin/all/",
             description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador",
             status_code=status.HTTP_200_OK)
-def get_tasks_all(
+def get_tasks_admin_all(
                   user = Depends(require_admin),
                   session : Session = Depends(get_session),
                   limit : int = Query(10, description='Indica el limite de resultados a recibir'),
                   offset : int = Query(0, description='Indica cuantos resultados se va a saltar antes de devolver'),
                   tags_searched: list[str] = Query(None, description='Recibe una lista de tags para la busqueda'),
                   category_searched : str = Query(None, description='Indica la categoria para solo buscar por ese valor'),
-                  order_by_date: str = None) -> list[Tasks]:
+                  order_by_date: str = None) -> list[TaskReadAdmin]:
 
     try:
         statement = select(Tasks).limit(limit).offset(offset)
@@ -100,9 +100,9 @@ def get_tasks_all(
 
 @router.get("/admin/{id}", status_code=status.HTTP_200_OK, response_model=TaskRead, 
             description="Obtiene la nota con id especifico. Requiere permiso de administrador")
-def tasks_search_id(id: int,
+def tasks_search_id_admin(id: int,
                     user = Depends(require_admin),
-                    session : Session = Depends(get_session)) -> TaskRead:
+                    session : Session = Depends(get_session)) -> TaskReadAdmin:
     try:
         result = session.get(Tasks, id)
         
@@ -194,7 +194,7 @@ def delete_task(id: int,
     
 
 @router.delete("/admin/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una tarea con id especifico")
-def delete_task(id: int,
+def delete_task_admin(id: int,
                 user = Depends(require_admin),
                 session : Session = Depends(get_session)):
 

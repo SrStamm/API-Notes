@@ -14,4 +14,4 @@ alembic.ini
 ./test/__pycache__
 .dockerignore
 requeriments.txt
-
+./htlmcov
