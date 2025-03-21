@@ -2,7 +2,7 @@
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from routers import task, users, auth
+from routers import notes, users, auth
 from DB.database import create_db_and_tables
 from fastapi_pagination import Page, add_pagination
 import logging
@@ -26,7 +26,7 @@ except:
     print({"error":"No se pudo conectar con la base de datos"})
 
 # Routers
-app.include_router(task.router)
+app.include_router(notes.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 

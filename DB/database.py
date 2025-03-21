@@ -1,5 +1,5 @@
 from sqlmodel import Session, SQLModel, create_engine, select, or_
-from Models.db_models import Users, Tasks
+from Models.db_models import Users, Notes
 
 postgres_url = "postgresql://postgres:lubu19$@localhost:5432/mydatabase"
 engine = create_engine(postgres_url, echo=True)

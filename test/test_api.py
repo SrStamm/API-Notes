@@ -1,15 +1,13 @@
 # Testing de los endpoints
 # Falta testear Admin
+# Falta testear Autorizacion
 
-from Models.db_models import Users
-from routers.auth import encrypt_password
+from Models.db_models import Users, Notes
 from DB.database import get_session
 from fastapi.testclient import TestClient
 from prueba import app
 from sqlmodel import SQLModel, create_engine, Session
-import pytest
-import os
-import errno
+import pytest, os, errno
 from datetime import date
 
 # Crea la BD, cierra las conexiones y elimina la BD
@@ -99,8 +97,8 @@ def test_get_user_me(client, auth_headers):
     response = client.get("/users/me", headers=auth_headers)
     assert response.status_code == 200
     user_data = response.json()
-    assert all(key in user_data for key in ["username","email","user_id"])
-    assert response.json() == {"username": "test", "email":"test@test.com", "user_id":1}
+    assert all(key in user_data for key in ["username","user_id"])
+    assert response.json() == {"username": "test", "user_id":1}
 
 @pytest.mark.users_testing
 def test_get_user_all(client, auth_headers):
@@ -109,13 +107,13 @@ def test_get_user_all(client, auth_headers):
     users = response.json()
     assert isinstance(users, list)
     for user in users:
-        assert all(key in user for key in ["username","email","user_id"])
+        assert all(key in user for key in ["username","user_id"])
 
 @pytest.mark.users_testing
 def test_get_user_by_username(client, auth_headers):
     response = client.get("/users/all-users/", headers=auth_headers, params={"username":"test"})
     assert response.status_code == 200
-    assert response.json() == {"username": "test", "email":"test@test.com", "user_id":1}
+    assert response.json() == {"username": "test", "user_id":1}
 
 @pytest.mark.users_testing
 def test_failed_get_user_all(client, auth_headers):
@@ -127,7 +125,7 @@ def test_failed_get_user_all(client, auth_headers):
 def test_get_user_id(client, auth_headers):
     response = client.get("/users/1", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json() == {"username": "test", "email":"test@test.com", "user_id":1}
+    assert response.json() == {"username": "test", "user_id":1}
 
 @pytest.mark.users_testing
 def test_failed_get_user_id(client, auth_headers):
@@ -135,86 +133,80 @@ def test_failed_get_user_id(client, auth_headers):
     assert response.status_code == 404
     assert response.json() == {"detail":"No se ha encontrado el usario"}
 
-# Creacion, lectura y modificacion de task
-@pytest.mark.tasks_testing
-def test_create_task(client, auth_headers):
-    response = client.post("/tasks", headers=auth_headers, json={"text":"testing", "user_id":1})
+# Creacion, lectura y modificacion de note
+@pytest.mark.notes_testing
+def test_create_note(client, auth_headers):
+    response = client.post("/notes/", headers=auth_headers, json={"text":"testing"})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-@pytest.mark.tasks_testing
-def test_create_many_tasks(client, auth_headers):
-    response = client.post("/tasks", headers=auth_headers, json={"text":"ojala, no?", "user_id":1})
+@pytest.mark.notes_testing
+def test_create_many_notes(client, auth_headers):
+    response = client.post("/notes", headers=auth_headers, json={"text":"ojala, no?", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-    response = client.post("/tasks", headers=auth_headers, json={"text":"vvlc", "user_id":1})
+    response = client.post("/notes", headers=auth_headers, json={"text":"vvlc", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-    response = client.post("/tasks", headers=auth_headers, json={"text":"sasaki", "user_id":1})
+    response = client.post("/notes", headers=auth_headers, json={"text":"sasaki", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-    response = client.patch(f"/tasks/{3}", headers=auth_headers, json={"category":"Congreso", "tags":["cierrenlo"]})
+    response = client.patch(f"/notes/{3}", headers=auth_headers, json={"category":"work", "tags":["cierrenlo"]})
     assert response.status_code == 202
-    assert response.json() == {"detail": "Tarea actualizada con éxito"}
+    assert response.json() == {"detail": "Nota actualizada con éxito"}
 
-    response = client.patch(f"/tasks/{4}", headers=auth_headers, json={"category":"Anime", "tags":["Personaje"]})
+    response = client.patch(f"/notes/{4}", headers=auth_headers, json={"category":"study", "tags":["Personaje"]})
     assert response.status_code == 202
-    assert response.json() == {"detail": "Tarea actualizada con éxito"}
+    assert response.json() == {"detail": "Nota actualizada con éxito"}
 
-@pytest.mark.tasks_testing
-def test_get_tasks_filtered(client, auth_headers):
-    response = client.get('/tasks/', headers=auth_headers, params={'limit':2})
+@pytest.mark.notes_testing
+def test_get_notes_filtered(client, auth_headers):
+    response = client.get('/notes/', headers=auth_headers, params={'limit':2})
     assert response.status_code == 200
-    tasks = response.json()
-    assert isinstance(tasks, list)
-    assert len(tasks) == 2
+    notes = response.json()
+    assert isinstance(notes, list)
+    assert len(notes) == 2
 
-    response = client.get('/tasks/', headers=auth_headers, params={'category_searched':'Congreso'})
+    response = client.get('/notes/', headers=auth_headers, params={'category_searched':'work'})
     assert response.status_code == 200
-    assert response.json() == [{'id': 3, 'text': 'vvlc', 'category': 'Congreso', 'tags': [{'tag': 'cierrenlo'}], 'user_id': 1}]
+    assert response.json() == [{'id': 3, 'text': 'vvlc', 'category': 'work', 'tags': [{'tag': 'cierrenlo'}], 'user_id': 1}]
 
-    """response = client.get('/tasks/', headers=auth_headers, params={'tags_searched':'Congreso'})
+@pytest.mark.notes_testing
+def test_get_notes(client, auth_headers):
+    response = client.get("/notes/", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json() == [
-        {'id': 3, 'text': 'vvlc', 'category': 'Congreso', 'tags': [{'tag': 'cierrenlo'}], 'user_id': 1}
-    ]"""
-
-@pytest.mark.tasks_testing
-def test_get_tasks(client, auth_headers):
-    response = client.get("/tasks/", headers=auth_headers)
-    assert response.status_code == 200
-    tasks = response.json()
-    assert isinstance(tasks, list)
-    for user in tasks:
+    notes = response.json()
+    assert isinstance(notes, list)
+    for user in notes:
         assert all(key in user for key in ["text","id","category", "tags", "user_id"])
 
-@pytest.mark.tasks_testing
-def test_update_task(client, auth_headers):
-    response = client.patch(f"/tasks/{1}", headers=auth_headers, json={"text":"testing de update", "category":"Test", "tags":["probando","olvidalo"]})
+@pytest.mark.notes_testing
+def test_update_note(client, auth_headers):
+    response = client.patch(f"/notes/{1}", headers=auth_headers, json={"text":"testing de update", "category":"study", "tags":["probando","olvidalo"]})
     assert response.status_code == 202
-    assert response.json() == {"detail": "Tarea actualizada con éxito"}
+    assert response.json() == {"detail": "Nota actualizada con éxito"}
 
-@pytest.mark.tasks_testing
-def test_failed_update_task(client, auth_headers):
-    response = client.patch(f"/tasks/{10000}", headers=auth_headers, json={"text":"testing de update", "category":"Test", "tags":["probando","olvidalo"]})
+@pytest.mark.notes_testing
+def test_failed_update_note(client, auth_headers):
+    response = client.patch(f"/notes/{10000}", headers=auth_headers, json={"text":"testing de update", "category":"Test", "tags":["probando","olvidalo"]})
     assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontró la tarea."}
+    assert response.json() == {"detail": "No se encontró la nota."}
 
-# Eliminacion de task
-@pytest.mark.tasks_testing
-def test_delete_task(client, auth_headers):
-    response = client.delete("/tasks/1", headers=auth_headers)
+# Eliminacion de note
+@pytest.mark.notes_testing
+def test_delete_note(client, auth_headers):
+    response = client.delete("/notes/1", headers=auth_headers)
     assert response.status_code == 202
-    assert response.json() == {"detail": "Tarea eliminada exitosamente"}
+    assert response.json() == {"detail": "Nota eliminada exitosamente"}
 
-@pytest.mark.tasks_testing
-def test_failed_delete_task(client, auth_headers):
-    response = client.delete("/tasks/100000", headers=auth_headers)
+@pytest.mark.notes_testing
+def test_failed_delete_note(client, auth_headers):
+    response = client.delete("/notes/100000", headers=auth_headers)
     assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontró la tarea."}
+    assert response.json() == {"detail": "No se encontró la nota."}
 
 @pytest.mark.users_testing
 # Actualizacion del usuario
@@ -293,44 +285,71 @@ def test_failed_delete_user_admin(client, auth_headers_admin):
     assert response.status_code == 404
     assert response.json() == {"detail":"No se ha encontrado el usario"}
 
-@pytest.mark.tasks_testing
-def test_create_many_tasks_2(client, auth_headers_admin):
-    response = client.post("/tasks", headers=auth_headers_admin, json={"text":"ojala, no?", "user_id":1})
+@pytest.mark.admin_testing
+def test_create_many_notes_2(client, auth_headers_admin):
+    response = client.post("/notes", headers=auth_headers_admin, json={"text":"ojala, no?", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-    response = client.post("/tasks", headers=auth_headers_admin, json={"text":"vvlc", "user_id":1})
+    response = client.post("/notes", headers=auth_headers_admin, json={"text":"vvlc", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
-    response = client.post("/tasks", headers=auth_headers_admin, json={"text":"sasaki", "user_id":1})
+    response = client.post("/notes", headers=auth_headers_admin, json={"text":"sasaki", "user_id":1})
     assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva tarea."}
-
+    assert response.json() == {"detail": "Se creó una nueva nota."}
 
 @pytest.mark.admin_testing
-def test_get_tasks_admin(client, auth_headers_admin):
-    response = client.get("/tasks/admin/all/", headers=auth_headers_admin)
+def test_get_notes_admin(client, auth_headers_admin):
+    response = client.get("/notes/admin/all/", headers=auth_headers_admin)
     assert response.status_code == 200
-    tasks = response.json()
-    assert isinstance(tasks, list)
-    for user in tasks:
+    notes = response.json()
+    assert isinstance(notes, list)
+    for user in notes:
         assert all(key in user for key in ["text","id","category", "tags", "user_id", "create_date"])
 
-    response = client.get("/tasks/admin/all/", headers=auth_headers_admin, params={"limit":2, "order_by_date":"asc"})
+    response = client.get("/notes/admin/all/", headers=auth_headers_admin, params={"limit":2, "order_by_date":"asc"})
     assert response.status_code == 200
-    tasks = response.json()
-    assert isinstance(tasks, list)
-    assert len(tasks) == 2
+    notes = response.json()
+    assert isinstance(notes, list)
+    assert len(notes) == 2
 
 @pytest.mark.admin_testing
-def test_get_tasks_admin(client, auth_headers_admin):
-    response = client.get("/tasks/admin/1", headers=auth_headers_admin)
+def test_get_notes_admin_by_id(client, auth_headers_admin):
+    response = client.get("/notes/admin/1", headers=auth_headers_admin)
     assert response.status_code == 200
-    assert response.json() == {"text":"ojala, no?", "user_id":1, "category":"Unknown", "user_id":3, "id":1, "tags":[]}
+    assert response.json() == {"text":"ojala, no?", "user_id":1, "category":"unknown", "user_id":3, "id":1, "tags":[]}
 
 @pytest.mark.admin_testing
-def test_get_tasks_admin(client, auth_headers_admin):
-    response = client.delete("/tasks/admin/1", headers=auth_headers_admin)
+def test_failed_get_notes_admin_by_id(client, auth_headers_admin):
+    response = client.get("/notes/admin/666666", headers=auth_headers_admin)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "No se encontró la nota."}
+
+@pytest.mark.admin_testing
+def test_delete_notes_admin(client, auth_headers_admin):
+    response = client.delete("/notes/admin/1", headers=auth_headers_admin)
     assert response.status_code == 202
-    assert response.json() == {"detail": "Tarea eliminada exitosamente"}
+    assert response.json() == {"detail": "Nota eliminada exitosamente"}
+
+@pytest.mark.admin_testing
+def test_failed_delete_notes_admin(client, auth_headers_admin):
+    response = client.delete("/notes/admin/6666666", headers=auth_headers_admin)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "No se encontró la nota."}
+
+@pytest.mark.auth_testing
+def test_user_disabled(client, auth_headers_admin):
+    response = client.put("/users/admin/4", headers=auth_headers_admin, json={"username": "fallara", "password": "0000", "email":"cambio@email.com", 'disabled':True})
+    assert response.status_code == 202
+    assert response.json() == {"detail":"El usuario fue actualizado"}
+
+    login_data = {"username": "fallara", "password": "0000"}
+    response = client.post("/login", data=login_data)
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    header = {"Authorization": f"Bearer {token}"}
+
+    response = client.post('/notes/', headers=header, json={'text':'inactivo'})
+    response.status_code == 400
+    response.json() == {'detail':'Usuario inactivo'}

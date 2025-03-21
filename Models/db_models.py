@@ -12,6 +12,11 @@ class Role(str, Enum):
     USER = 'user'
     ADMIN = 'admin'
 
+class Category(str, Enum):
+    WORK = 'work'
+    STUDY = 'study'
+    UNKNOWN = 'unknown'
+
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")
     username : str = Field(index=True)
@@ -20,7 +25,7 @@ class Users(SQLModel, table=True):
     password : str = Field(description="Contraseña del usuario")
     role : Role = Field(default=Role.USER, description="Rol del usuario")
 
-    tasks : List["Tasks"] = Relationship(back_populates="user", cascade_delete=True)
+    notes : List["Notes"] = Relationship(back_populates="user", cascade_delete=True)
 
     def encrypt_password(password : str):
         password = password.encode()
@@ -39,6 +44,42 @@ class Users(SQLModel, table=True):
         }
     }
 
+class notes_tags_link(SQLModel, table=True):
+    note_id : int | None = Field(default=None, foreign_key="notes.id", primary_key=True)
+    tag_id : int | None = Field(default=None, foreign_key="tags.id", primary_key=True)
+class Tags(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    tag: str = Field(index=True, unique=True)
+    notes: List["Notes"] = Relationship(back_populates="tags", link_model=notes_tags_link)
+
+class Notes(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    text : str | None = Field(default=None, description="Texto de la nota")
+    create_date : date = Field(description="Fecha de creacion")
+    category : Category = Field(default=Category.UNKNOWN, description="Tipo de nota para agruparlas")
+    user_id : int = Field(foreign_key="users.user_id", index=True, description="Relacion con el usuario", ondelete="CASCADE")
+
+    user: "Users" = Relationship(back_populates="notes")
+    tags: List["Tags"] = Relationship(back_populates="notes", link_model=notes_tags_link)
+
+    model_config = {
+        "json_schema_extra" : 
+        {
+            "examples" : 
+            [
+                {
+                    "id" : 0,
+                    "text" : "Hello World",
+                    "create_date" : "2000-01-01",
+                    "category" : "unknown",
+                    "user_id" : 1,
+                    "tags" : ["Study","Easy"]
+                    
+                }
+            ]
+        }
+    }
+
 class UserCreate(SQLModel):
     username: str
     email: EmailStr
@@ -51,7 +92,6 @@ class UserCreate(SQLModel):
 class UserRead(SQLModel):
     user_id : int
     username : str
-    email : EmailStr
 
 class UserReadAdmin(SQLModel):
     user_id : int 
@@ -71,53 +111,17 @@ class UserUpdateAdmin(SQLModel):
     role : str | None = None
     disabled: bool | None = None
 
-class tasks_tags_link(SQLModel, table=True):
-    task_id : int | None = Field(default=None, foreign_key="tasks.id", primary_key=True)
-    tag_id : int | None = Field(default=None, foreign_key="tags.id", primary_key=True)
-class Tags(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    tag: str = Field(index=True, unique=True)
-    tasks: List["Tasks"] = Relationship(back_populates="tags", link_model=tasks_tags_link)
-
 class read_tag(SQLModel):
     tag: str
 
-class Tasks(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    text : str = Field(description="Texto de la tarea")
-    create_date : date = Field(default_factory= date.today, description="Fecha de creacion")
-    category : str = Field(default="Unknown", description="Tipo de nota para agruparlas")
-    user_id : int = Field(foreign_key="users.user_id", index=True, description="Relacion con el usuario", ondelete="CASCADE")
-
-    user: "Users" = Relationship(back_populates="tasks")
-    tags: List["Tags"] = Relationship(back_populates="tasks", link_model=tasks_tags_link)
-
-    model_config = {
-        "json_schema_extra" : 
-        {
-            "examples" : 
-            [
-                {
-                    "id" : 0,
-                    "text" : "Hello World",
-                    "create_date" : "2000-01-01",
-                    "category" : "Study",
-                    "user_id" : 1,
-                    "tags" : ["Study","Easy"]
-                    
-                }
-            ]
-        }
-    }
-
-class TaskRead(SQLModel):
+class NoteRead(SQLModel):
     id: int
     text : str
     category : str
     tags : List[read_tag]
     user_id: int
 
-class TaskReadAdmin(SQLModel):
+class NoteReadAdmin(SQLModel):
     id: int
     text : str
     create_date : date
@@ -125,7 +129,7 @@ class TaskReadAdmin(SQLModel):
     tags : List[read_tag]
     user_id: int
 
-class TaskUpdate(SQLModel):
+class NoteUpdate(SQLModel):
     text: str | None = None
     category: str | None = None
     tags : List[str] | None = None
