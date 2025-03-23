@@ -1,5 +1,5 @@
 from sqlmodel import Field, SQLModel, Relationship
-from datetime import date
+from datetime import datetime
 from pydantic import EmailStr, field_validator
 from typing import List
 from enum import Enum
@@ -55,7 +55,7 @@ class Tags(SQLModel, table=True):
 class Notes(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text : str | None = Field(default=None, description="Texto de la nota")
-    create_date : date = Field(description="Fecha de creacion")
+    create_at : datetime = Field(description="Fecha de creacion")
     category : Category = Field(default=Category.UNKNOWN, description="Tipo de nota para agruparlas")
     user_id : int = Field(foreign_key="users.user_id", index=True, description="Relacion con el usuario", ondelete="CASCADE")
 
@@ -70,7 +70,7 @@ class Notes(SQLModel, table=True):
                 {
                     "id" : 0,
                     "text" : "Hello World",
-                    "create_date" : "2000-01-01",
+                    "create_at" : "2000-01-01",
                     "category" : "unknown",
                     "user_id" : 1,
                     "tags" : ["Study","Easy"]
@@ -124,7 +124,7 @@ class NoteRead(SQLModel):
 class NoteReadAdmin(SQLModel):
     id: int
     text : str
-    create_date : date
+    create_at : datetime
     category : str
     tags : List[read_tag]
     user_id: int

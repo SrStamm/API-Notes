@@ -60,7 +60,7 @@ def get_notes_user(
             if order_by_date.upper() not in ("ASC", "DESC"):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
             
-            order_func = Notes.create_date.asc() if order_by_date.upper() == "ASC" else Notes.create_date.desc()
+            order_func = Notes.create_at.asc() if order_by_date.upper() == "ASC" else Notes.create_at.desc()
             statement = statement.order_by(order_func)
 
         # -- Resultados de la busqueda
@@ -121,7 +121,7 @@ def get_notes_admin_all(
             if order_by_date.upper() not in ("ASC", "DESC"):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
 
-            order_func = Notes.create_date.asc() if order_by_date.upper() == "ASC" else Notes.create_date.desc()
+            order_func = Notes.create_at.asc() if order_by_date.upper() == "ASC" else Notes.create_at.desc()
             statement = statement.order_by(order_func)
 
         results = session.exec(statement.limit(limit).offset(offset)).all()
@@ -153,13 +153,13 @@ def notes_search_id_admin(id: int,
 
 @router.post("/", status_code=status.HTTP_201_CREATED, description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
 def create_notes(note: Notes,
-                user=Depends(current_user),
+                user = Depends(current_user),
                 session : Session = Depends(get_session)):
     
     try:
         note = Notes(**note.model_dump(),
                      user=user,
-                     create_date=datetime.now())
+                     create_at = datetime.now())
         
         session.add(note)
         session.commit()

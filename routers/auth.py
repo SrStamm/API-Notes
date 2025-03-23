@@ -51,7 +51,7 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
 
     if user_found.disabled is True:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_423_LOCKED, 
             detail="Usuario inactivo")
 
     return user_found
@@ -79,12 +79,12 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session =
 # Valida si el user esta acivo
 async def current_user(user: Users = Depends(auth_user)):
     if user.disabled is True:
-        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"detail":"Usuario inactivo"})
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="Usuario inactivo")
     return user
 
 async def require_admin(user = Depends(current_user)):
-    if user.role == 'ADMIN':
+    if user.role == 'admin':
         return user
-    
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})    
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})    
