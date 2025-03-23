@@ -22,21 +22,26 @@ def get_notes_user(
                    limit : int = Query(10, description="Indica la cantidad de resultados a recibir"),
                    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
                    tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
-                   category_searched: str = Query(default=None, description='Indica una categoria para la busqueda'),
-                   order_by_category: str = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
-                   order_by_date: str = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
-                   search_text: str = Query(None, description='Busqueda por texto')) -> list[NoteRead]:
+                   category_searched: str | None = Query(default=None, description='Indica una categoria para la busqueda'),
+                   order_by_category: str | None = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
+                   order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
+                   search_text: str | None = Query(None, description='Busqueda por texto')) -> list[NoteRead]:
     
     try:
         statement = select(Notes).where(Notes.user_id == user.user_id)
+
+        # Busqueda por texto
+        if search_text:
+            statement = statement.where(Notes.text.ilike(f"%{search_text}%"))
         
         # -- filtrado por tags
         if tags_searched:
-            statement = (statement.join(notes_tags_link, Notes.id == notes_tags_link.note_id)
-                         .join(Tags, notes_tags_link.tag_id == Tags.id)
-                         .group_by(Notes.id)
-                         .having(func.count(Tags.id) == len(tags_searched)) # -- Solo las notas que tengan todos los tags
-                         )
+            for tag in tags_searched:
+                subquery = select(notes_tags_link).join(Tags).where(
+                    Notes.id == notes_tags_link.note_id,
+                    Tags.tag == tag
+                ).exists()
+                statement = statement.where(subquery)
        
         # -- filtrado por categoria
         if category_searched:
@@ -44,12 +49,17 @@ def get_notes_user(
 
         # -- ordena segun la categoria
         if order_by_category:
-            # En caso de que se pase un valor distinto a 'ASC', se ordena de forma descendente
+            if order_by_category.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+            
             order_func = Notes.category.asc() if order_by_category.upper() == "ASC" else Notes.category.desc()
             statement = statement.order_by(order_func)
 
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
         if order_by_date:
+            if order_by_date.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+            
             order_func = Notes.create_date.asc() if order_by_date.upper() == "ASC" else Notes.create_date.desc()
             statement = statement.order_by(order_func)
 
@@ -59,6 +69,7 @@ def get_notes_user(
         return results
 
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en get_notes_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
@@ -72,29 +83,52 @@ def get_notes_admin_all(
                   limit : int = Query(10, description='Indica el limite de resultados a recibir'),
                   offset : int = Query(0, description='Indica cuantos resultados se va a saltar antes de devolver'),
                   tags_searched: list[str] = Query(None, description='Recibe una lista de tags para la busqueda'),
-                  category_searched : str = Query(None, description='Indica la categoria para solo buscar por ese valor'),
-                  order_by_date: str = None) -> list[NoteReadAdmin]:
+                  category_searched : str | None = Query(None, description='Indica la categoria para solo buscar por ese valor'),
+                  order_by_date: str | None = Query(None, description="Ordena por la feccha de creacion"),
+                  order_by_category: str | None = Query(None, description="Ordena por la categoria"),
+                  search_text: str | None = None) -> list[NoteReadAdmin]:
 
     try:
-        statement = select(Notes).limit(limit).offset(offset)
+        statement = select(Notes)
 
+        # Busqueda por texto
+        if search_text:
+            statement = statement.where(Notes.text.ilike(f"%{search_text}%"))
+        
         # -- filtrado por tags
         if tags_searched:
-            statement = statement.join(notes_tags_link).join(Tags).where(Notes.tag.in_(tags_searched)).group_by(Notes.id).having(func.count(Tags.id) == len(tags_searched))
-
+            for tag in tags_searched:
+                subquery = select(notes_tags_link).join(Tags).where(
+                    Notes.id == notes_tags_link.note_id,
+                    Tags.tag == tag
+                ).exists()
+                statement = statement.where(subquery).distinct()
+        
         # -- busqueda con categoria designada
         if category_searched:
             statement = statement.where(Notes.category == category_searched)
 
+        # -- ordena segun la categoria
+        if order_by_category: 
+            if order_by_category.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+            
+            order_func = Notes.category.asc() if order_by_category.upper() == "ASC" else Notes.category.desc()
+            statement = statement.order_by(order_func)
+
         # -- ordena segun la fecha de creacion, de forma ascendente o descendente
-        if order_by_date:
+        if order_by_date: 
+            if order_by_date.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+
             order_func = Notes.create_date.asc() if order_by_date.upper() == "ASC" else Notes.create_date.desc()
             statement = statement.order_by(order_func)
 
-        results = session.exec(statement).all()
+        results = session.exec(statement.limit(limit).offset(offset)).all()
         return results
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en get_notes_all: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
@@ -112,6 +146,7 @@ def notes_search_id_admin(id: int,
         return result
 
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en notes_search_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
@@ -131,6 +166,7 @@ def create_notes(note: Notes,
         return {"detail": "Se creó una nueva nota."}
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en create_notes: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la nota.")
 
@@ -171,6 +207,7 @@ def update_note(
         return {"detail": "Nota actualizada con éxito"}
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en update_note: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar la nota.")
 
@@ -191,6 +228,7 @@ def delete_note(id: int,
         return {"detail": "Nota eliminada exitosamente"}
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en delete_note: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la nota.")
     
@@ -211,5 +249,6 @@ def delete_note_admin(id: int,
         return {"detail": "Nota eliminada exitosamente"}
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en delete_note: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la nota.")

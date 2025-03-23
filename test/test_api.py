@@ -49,38 +49,34 @@ def test_read_main(client):
 
 # Creacion de usuario
 @pytest.mark.users_testing
-def test_create_user(client):
-    response = client.post("/users/", json={"username": "test", "email": "test@test.com", "password":"5555"})
-    assert response.status_code == 202
-    assert response.json() == {"detail" : "Se creo un nuevo usuario."}
+@pytest.mark.parametrize(
+    "username, email, password, expected_status_code, expected_detail",
+    [
+        ("test", "test@test.com", "5555", 202, "Se creo un nuevo usuario."),
+        ("f", "f@test.com", "00000", 202, "Se creo un nuevo usuario."),
+        ("test", "test@test.com", "5555", 406, "Ya existe un usuario con este username"),
+        ("testing", "test@test.com", "5555", 406, "Ya existe un usuario con este email")
+    ] 
+)
+def test_create_user(client, username, email, password, expected_status_code, expected_detail):
+    response = client.post("/users/", json={"username": username, "email": email, "password":password})
+    assert response.status_code == expected_status_code
+    assert response.json().get("detail") == expected_detail
 
-    response = client.post("/users/", json={"username": "f", "email": "f@test.com", "password":"00000"})
-    assert response.status_code == 202
-    assert response.json() == {"detail" : "Se creo un nuevo usuario."}
-
-@pytest.mark.users_testing
-def test_failed_create_user(client):
-    response = client.post("/users/", json={"username": "test", "email": "test@test.com", "password":"5555"})
-    assert response.status_code == 406
-    assert response.json() == {"detail":"Ya existe un usuario con este username"}
-
-    response = client.post("/users/", json={"username": "testing", "email": "test@test.com", "password":"5555"})
-    assert response.status_code == 406
-    assert response.json() == {"detail":"Ya existe un usuario con este email"}
-
-def test_login(client):
-    login_data = {"username": "test", "password": "5555"}  # Credenciales
+@pytest.mark.auth_testing
+@pytest.mark.parametrize(
+    "username, password, expected_status_code, get, expected_detail",
+    [
+        ("test", "5555", 200, "token_type", "bearer"),
+        ("falla", "error", 404, "detail", "Usuario no encontrado o no existe"),
+        ("test", "error", 400, "detail", "Contraseña incorrecta")
+    ]
+)
+def test_login(client, username, password, get, expected_status_code, expected_detail):
+    login_data = {"username": username, "password": password}  # Credenciales
     response = client.post("/login", data=login_data)
-    assert response.status_code == 200
-
-def test_failed_login(client):
-    response = client.post("/login", data={"username": "falla", "password": "error"})
-    assert response.status_code == 404
-    assert response.json() == {"detail":"Usuario no encontrado o no existe"}
-
-    response = client.post("/login", data={"username": "test", "password": "error"})
-    assert response.status_code == 400
-    assert response.json() == {"detail":"Contraseña incorrecta"}
+    assert response.status_code == expected_status_code
+    assert response.json().get(get) == expected_detail
 
 # Login de usuario
 @pytest.fixture
@@ -133,34 +129,36 @@ def test_failed_get_user_id(client, auth_headers):
     assert response.status_code == 404
     assert response.json() == {"detail":"No se ha encontrado el usario"}
 
-# Creacion, lectura y modificacion de note
 @pytest.mark.notes_testing
-def test_create_note(client, auth_headers):
-    response = client.post("/notes/", headers=auth_headers, json={"text":"testing"})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
+@pytest.mark.parametrize (
+        "text, expected_status, expected_detail",
+        [
+            ("testing", 201, "Se creó una nueva nota."),
+            ("ojala, no", 201, "Se creó una nueva nota."),
+            ("vvlc", 201, "Se creó una nueva nota."),
+            ("sasaki", 201, "Se creó una nueva nota.")
+        ]
+)
+def test_create_note(client, auth_headers, text, expected_status, expected_detail):
+    response = client.post("/notes/", headers=auth_headers, json={"text":text})
+    assert response.status_code == expected_status
+    assert response.json().get("detail") == expected_detail
+
 
 @pytest.mark.notes_testing
-def test_create_many_notes(client, auth_headers):
-    response = client.post("/notes", headers=auth_headers, json={"text":"ojala, no?", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
-
-    response = client.post("/notes", headers=auth_headers, json={"text":"vvlc", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
-
-    response = client.post("/notes", headers=auth_headers, json={"text":"sasaki", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
-
-    response = client.patch(f"/notes/{3}", headers=auth_headers, json={"category":"work", "tags":["cierrenlo"]})
-    assert response.status_code == 202
-    assert response.json() == {"detail": "Nota actualizada con éxito"}
-
-    response = client.patch(f"/notes/{4}", headers=auth_headers, json={"category":"study", "tags":["Personaje"]})
-    assert response.status_code == 202
-    assert response.json() == {"detail": "Nota actualizada con éxito"}
+@pytest.mark.parametrize (
+        "id, category, tags, expected_status, expected_detail",
+        [
+            (3, "work", ["cierrenlo"], 202, "Nota actualizada con éxito"),
+            (4, "study", ["Personaje"], 202, "Nota actualizada con éxito"),
+            (1, "study", ["probando","olvidalo"], 202, "Nota actualizada con éxito"),
+            (10000, "study", ["probando","olvidalo"], 404, "No se encontró la nota.")
+        ]
+)
+def test_path_notes(client, auth_headers, id, category, tags, expected_detail, expected_status):
+    response = client.patch(f"/notes/{id}", headers=auth_headers, json={"category":category, "tags":tags})
+    assert response.status_code == expected_status
+    assert response.json().get("detail") == expected_detail
 
 @pytest.mark.notes_testing
 def test_get_notes_filtered(client, auth_headers):
@@ -184,32 +182,18 @@ def test_get_notes(client, auth_headers):
         assert all(key in user for key in ["text","id","category", "tags", "user_id"])
 
 @pytest.mark.notes_testing
-def test_update_note(client, auth_headers):
-    response = client.patch(f"/notes/{1}", headers=auth_headers, json={"text":"testing de update", "category":"study", "tags":["probando","olvidalo"]})
-    assert response.status_code == 202
-    assert response.json() == {"detail": "Nota actualizada con éxito"}
-
-@pytest.mark.notes_testing
-def test_failed_update_note(client, auth_headers):
-    response = client.patch(f"/notes/{10000}", headers=auth_headers, json={"text":"testing de update", "category":"Test", "tags":["probando","olvidalo"]})
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontró la nota."}
-
-# Eliminacion de note
-@pytest.mark.notes_testing
-def test_delete_note(client, auth_headers):
+@pytest.mark.parametrize (
+    "id, expected_code, expected_detail",
+    [
+        (1, 202, "Nota eliminada exitosamente"),
+        (10000, 404, "No se encontró la nota.")
+    ] )
+def test_delete_note(client, auth_headers, id, expected_code, expected_detail):
     response = client.delete("/notes/1", headers=auth_headers)
-    assert response.status_code == 202
-    assert response.json() == {"detail": "Nota eliminada exitosamente"}
-
-@pytest.mark.notes_testing
-def test_failed_delete_note(client, auth_headers):
-    response = client.delete("/notes/100000", headers=auth_headers)
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontró la nota."}
+    assert response.status_code == expected_code
+    assert response.json().get("detail") == expected_detail
 
 @pytest.mark.users_testing
-# Actualizacion del usuario
 def test_patch_user(client, auth_headers):
     response = client.patch("/users/me", headers=auth_headers, json={"username": "testing", "password": "0000", "email":"cambio@email.com"})
     assert response.status_code == 202
@@ -224,7 +208,6 @@ def auth_headers2(client):
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-# Eliminacion de usuario
 @pytest.mark.users_testing
 def test_delete_actual_user(client, auth_headers2):
     response = client.delete("/users/me", headers=auth_headers2)
@@ -245,7 +228,6 @@ def test_create_admin_user(client):
 
 @pytest.fixture
 def auth_headers_admin(client):
-
     login_data = {"username": "admin", "password": "admin"}  # Credenciales
     response = client.post("/login", data=login_data)  # OAuth usa 'data'
     assert response.status_code == 200
@@ -259,45 +241,40 @@ def test_get_user_admin(client, auth_headers_admin):
     assert response.json() == {'user_id' : 2, "username": "f", "email": "f@test.com", 'disabled': False, 'role': 'user'}
 
 @pytest.mark.admin_testing
-def test_put_user_admin(client, auth_headers_admin):
-    response = client.put("/users/admin/2", headers=auth_headers_admin, json={"username": "cambiado", "password": "1111", "email":"cambio@email.com"})
-    assert response.status_code == 202
-    assert response.json() == {"detail":"El usuario fue actualizado"}
+@pytest.mark.parametrize (
+    "id, username, password, email, expected_status, expected_detail",
+    [
+        (2, "cambiado", "1111", "cambio@email.com", 202, "El usuario fue actualizado"),
+        (10000, "cambiado", "1111", "cambio@email.com", 404, "No se ha encontrado el usario")
+    ]
+)
+def test_put_user_admin(client, auth_headers_admin, id, username, password, email, expected_status, expected_detail):
+    response = client.put("/users/admin/{id}", headers=auth_headers_admin, json={"username": username, "password": password, "email":email})
+    assert response.status_code == expected_status
+    assert response.json().get("detail") == expected_detail
 
 @pytest.mark.admin_testing
-def test_failed_put_user_admin(client, auth_headers_admin):
-    response = client.put("/users/admin/10000", headers=auth_headers_admin, json={"username": "cambiado", "password": "1111", "email":"cambio@email.com"})
-    assert response.status_code == 404
-    assert response.json() == {"detail":"No se ha encontrado el usario"}
+@pytest.mark.parametrize(
+    "id, expected_status",
+    [(2, 204),
+     (10000, 404)]
+)
+def test_delete_user_admin(client, auth_headers_admin, id, expected_status):
+    response = client.delete("/users/admin/{id}", headers=auth_headers_admin)
+    assert response.status_code == expected_status
 
-@pytest.mark.admin_testing
-def test_delete_user_admin(client, auth_headers_admin):
-    response = client.post("/users/", headers=auth_headers_admin, json={"username": "eliminado", "email": "eli@minado.com", "password":"delete", "role":"user"})
-    assert response.status_code == 202
-    assert response.json() == {"detail" : "Se creo un nuevo usuario."}
-
-    response = client.delete("/users/admin/2", headers=auth_headers_admin)
-    assert response.status_code == 204
-
-@pytest.mark.admin_testing
-def test_failed_delete_user_admin(client, auth_headers_admin):
-    response = client.delete("/users/admin/10000", headers=auth_headers_admin)
-    assert response.status_code == 404
-    assert response.json() == {"detail":"No se ha encontrado el usario"}
-
-@pytest.mark.admin_testing
-def test_create_many_notes_2(client, auth_headers_admin):
-    response = client.post("/notes", headers=auth_headers_admin, json={"text":"ojala, no?", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
-
-    response = client.post("/notes", headers=auth_headers_admin, json={"text":"vvlc", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
-
-    response = client.post("/notes", headers=auth_headers_admin, json={"text":"sasaki", "user_id":1})
-    assert response.status_code == 201
-    assert response.json() == {"detail": "Se creó una nueva nota."}
+@pytest.mark.notes_testing
+@pytest.mark.parametrize (
+        "text, expected_status, expected_detail",
+         [("ojala, no", 201, "Se creó una nueva nota."),
+          ("vvlc", 201, "Se creó una nueva nota."),
+          ("sasaki", 201, "Se creó una nueva nota.")
+         ]
+        )
+def test_create_many_notes(client, auth_headers2, text, expected_status, expected_detail):
+    response = client.post("/notes/", headers=auth_headers2, json={"text":text})
+    assert response.status_code == expected_status
+    assert response.json().get("detail") == expected_detail
 
 @pytest.mark.admin_testing
 def test_get_notes_admin(client, auth_headers_admin):
@@ -327,16 +304,15 @@ def test_failed_get_notes_admin_by_id(client, auth_headers_admin):
     assert response.json() == {"detail": "No se encontró la nota."}
 
 @pytest.mark.admin_testing
-def test_delete_notes_admin(client, auth_headers_admin):
-    response = client.delete("/notes/admin/1", headers=auth_headers_admin)
-    assert response.status_code == 202
-    assert response.json() == {"detail": "Nota eliminada exitosamente"}
-
-@pytest.mark.admin_testing
-def test_failed_delete_notes_admin(client, auth_headers_admin):
-    response = client.delete("/notes/admin/6666666", headers=auth_headers_admin)
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontró la nota."}
+@pytest.mark.parametrize(
+    "id, status_expected, detail_expected",
+    [(1, 202, "Nota eliminada exitosamente"),
+     (666666, 404, "No se encontró la nota.")]
+)
+def test_delete_notes_admin(client, auth_headers_admin, id, status_expected, detail_expected):
+    response = client.delete("/notes/admin/{id}", headers=auth_headers_admin)
+    assert response.status_code == status_expected
+    assert response.json("detail") == detail_expected
 
 @pytest.mark.auth_testing
 def test_user_disabled(client, auth_headers_admin):

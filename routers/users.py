@@ -21,17 +21,19 @@ def read_all_users(limit : int = Query(5, description='Indica la cantidad de res
                    username : str = Query(None, description='Indica un username para la busqueda'),
                    session : Session = Depends(get_session)) -> list[UserRead] | UserRead:
     try: 
-        statement = select(Users).offset(offset).limit(limit)
+        statement = select(Users)
 
         if username:
             user_found = session.exec(statement.where(Users.username == username)).first()
             if not user_found:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User no encontrado")
         else:
-            user_found = session.exec(statement).all()
+            user_found = session.exec(statement.offset(offset).limit(limit)).all()
 
         return user_found
+    
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en read_all_users: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
@@ -56,6 +58,7 @@ def read_users_with_id(id: int = Path(ge=0),
         return results
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en read_users_with_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al obtener el usuario")
 
@@ -72,6 +75,7 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
         return user_found
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en read_users_with_id_for_admin: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al obtener el usuario")
 
@@ -99,6 +103,7 @@ def create_user(new_user : UserCreate, session : Session = Depends(get_session))
         return {"detail" : "Se creo un nuevo usuario."}
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en create_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear el usuario.")
 
@@ -128,6 +133,7 @@ def patch_user( user_data : UserUpdate,
         return {"detail":"Usuario actualizado con exito"}
 
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en patch_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar el usuario.")
 
@@ -161,6 +167,7 @@ def update_user(user_id : int,
         return {"detail":"El usuario fue actualizado"}
 
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en update_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar el usuario.")
 
@@ -175,25 +182,27 @@ def delete_actual_user(actual_user = Depends(current_user), session : Session = 
         return {"detail":"Usuario eliminado con éxito."}
 
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en delete_actual_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar el usuario")
 
 # Elimina el usuario indicado por id
-@router.delete("/admin/{id_}", status_code=status.HTTP_204_NO_CONTENT,
+@router.delete("/admin/{id}", status_code=status.HTTP_204_NO_CONTENT,
                description="Elimina el usuario de id especifico. Requiere permisos de administrador.")
-def delete_actual_user(id_ : int,
+def delete_actual_user(id : int,
                        user = Depends(require_admin),
                        session : Session = Depends(get_session)):
     try:
-        resultado = session.get(Users, id_)
+        user_found = session.get(Users, id)
         
-        if not resultado:
+        if not user_found:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
         
-        session.delete(resultado)
+        session.delete(user_found)
         session.commit()
         return status.HTTP_204_NO_CONTENT
     
     except SQLAlchemyError as e:
+        session.rollback()
         logger.error(f"Error en delete_actual_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar el usuario")

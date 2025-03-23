@@ -82,8 +82,9 @@ async def current_user(user: Users = Depends(auth_user)):
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"detail":"Usuario inactivo"})
     return user
 
-async def require_admin(user: Users = Depends(current_user)):
-    if user.role == 'USER':
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})    
-    return user
+async def require_admin(user = Depends(current_user)):
+    if user.role == 'ADMIN':
+        return user
+    
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})    

@@ -1,6 +1,6 @@
 {
     "workbench.settings.useSplitJSON": false,
-    "python.analysis.autoImportCompletions": false,
+    "python.analysis.autoImportCompletions": true,
     "python.testing.pytestArgs": [
         "test"
     ],
