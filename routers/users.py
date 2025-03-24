@@ -96,7 +96,6 @@ def create_user(new_user : UserCreate, session : Session = Depends(get_session))
                                     detail="Ya existe un usuario con este email")
 
         # Encripta la contraseña
-        # new_user.password = Users.encrypt_password(new_user.password)
         db_user = Users(**new_user.model_dump())
         session.add(db_user)
         session.commit()
@@ -143,7 +142,7 @@ def patch_user( user_data : UserUpdate,
 def update_user(user_id : int,
                 user_data: UserUpdateAdmin,
                 session : Session = Depends(get_session),
-                user = Depends(require_admin)):
+                user: Users = Depends(require_admin)):
     try:
         statement = select(Users).where(Users.user_id == user_id)
         user_found = session.exec(statement).first()
@@ -190,7 +189,7 @@ def delete_actual_user(actual_user = Depends(current_user), session : Session = 
 @router.delete("/admin/{id}", status_code=status.HTTP_204_NO_CONTENT,
                description="Elimina el usuario de id especifico. Requiere permisos de administrador.")
 def delete_actual_user(id : int,
-                       user = Depends(require_admin),
+                       user : Users = Depends(require_admin),
                        session : Session = Depends(get_session)):
     try:
         user_found = session.get(Users, id)

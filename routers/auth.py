@@ -1,9 +1,8 @@
-import http
 from fastapi import APIRouter, status, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from Models.db_models import Users, Sessions
 from DB.database import Session, select, get_session
 from uuid import uuid4
@@ -24,7 +23,7 @@ SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"
 crypt = CryptContext(schemes=["bcrypt"])
 
 # Se declara la url donde se obtiene el token
-oauth2 = OAuth2PasswordBearer(tokenUrl="login")
+oauth2 = OAuth2PasswordBearer(tokenUrl="login", scheme_name="Bearer")
 
 
 @router.post("/")
@@ -47,8 +46,8 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
     refresh_token = str(uuid4())
 
     # Declarar la fecha de expiracion
-    access_expires = datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)
-    refresh_expires = datetime.now() + timedelta(days=REFRESH_TOKEN_DURATION)
+    access_expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_DURATION)
+    refresh_expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DURATION)
 
     access_token = {
         "sub": str(user_found.user_id),
@@ -57,6 +56,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
 }
     
     encoded_access_token = jwt.encode(access_token, SECRET, algorithm=ALGORITHM)
+
     # Crear sesión en DB
     db_session = Sessions(
         session_id=jti,
@@ -77,7 +77,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
 
 
 @router.post("/refresh")
-async def login(refresh_token: str,
+async def refresh_token(refresh_token: str,
                 session : Session = Depends(get_session)):
     
     # Busqueda del token
@@ -88,7 +88,7 @@ async def login(refresh_token: str,
         ).first()
     
     # Comprobacion del resultado
-    if not result or result.refresh_expires < datetime.now():
+    if not result or result.refresh_expires < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Invalid Refresh Token")
 
     # Invalidar la session actual
@@ -101,9 +101,11 @@ async def login(refresh_token: str,
 
     new_access_token = {
         "sub": str(result.user_id),
-        "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION),
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_DURATION),
         "jti": new_jti
     }
+
+    encoded_access_token = jwt.encode(new_access_token, SECRET, algorithm=ALGORITHM)
 
     # Crear nueva sesion
     new_session = Sessions(
@@ -112,14 +114,14 @@ async def login(refresh_token: str,
         access_token= jwt.encode(new_access_token, SECRET, algorithm=ALGORITHM),
         refresh_token= new_refresh_token,
         access_expires= new_access_token["exp"],
-        refresh_expires= datetime.now() + timedelta(days=REFRESH_TOKEN_DURATION)
+        refresh_expires= datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DURATION)
     )
 
     session.add(new_session)
     session.commit()
 
     return {
-        "access_token": new_access_token,
+        "access_token": encoded_access_token,
         "refresh_token": new_refresh_token,
         "token_type": "bearer"
     }
@@ -134,7 +136,9 @@ def encrypt_password(password : str):
 async def auth_user(token: str = Depends(oauth2), session : Session = Depends(get_session)):
 
     try:
+        # Decodifica el jwt
         payload = jwt.decode(token, SECRET, algorithms=ALGORITHM)
+        # Obtiene los datos necesarios
         user_id = payload.get("sub")
         jti = payload.get("jti")
         
@@ -146,7 +150,7 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
             select(Sessions)
             .where(Sessions.session_id == jti)
             .where(Sessions.is_active == True)
-            .where(Sessions.access_expires > datetime.now())
+            .where(Sessions.access_expires > datetime.now(timezone.utc))
         ).first()
         
         user = session.get(Users, db_session.user_id)
@@ -165,8 +169,7 @@ async def current_user(user: Users = Depends(auth_user)):
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="Usuario inactivo")
     return user
 
-
-async def require_admin(user = Depends(current_user)):
+async def require_admin(user : Users = Depends(current_user)):
     if user.role == 'admin':
         return user
     else:

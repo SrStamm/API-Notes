@@ -17,7 +17,7 @@ router = APIRouter(prefix="/notes", tags=["Notes"])
 
 @router.get("/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
 def get_notes_user(
-                   user = Depends(current_user),
+                   user : Users = Depends(current_user),
                    session : Session = Depends(get_session),
                    limit : int = Query(10, description="Indica la cantidad de resultados a recibir"),
                    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
@@ -78,7 +78,7 @@ def get_notes_user(
             description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador",
             status_code=status.HTTP_200_OK)
 def get_notes_admin_all(
-                  user = Depends(require_admin),
+                  user: Users = Depends(require_admin),
                   session : Session = Depends(get_session),
                   limit : int = Query(10, description='Indica el limite de resultados a recibir'),
                   offset : int = Query(0, description='Indica cuantos resultados se va a saltar antes de devolver'),
@@ -136,7 +136,7 @@ def get_notes_admin_all(
 @router.get("/admin/{id}", status_code=status.HTTP_200_OK, response_model=NoteRead, 
             description="Obtiene la nota con id especifico. Requiere permiso de administrador")
 def notes_search_id_admin(id: int,
-                    user = Depends(require_admin),
+                    user: Users = Depends(require_admin),
                     session : Session = Depends(get_session)) -> NoteReadAdmin:
     try:
         result = session.get(Notes, id)
@@ -153,7 +153,7 @@ def notes_search_id_admin(id: int,
 
 @router.post("/", status_code=status.HTTP_201_CREATED, description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
 def create_notes(note: Notes,
-                user = Depends(current_user),
+                user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
     
     try:
@@ -214,7 +214,7 @@ def update_note(
 
 @router.delete("/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una nota con id especifico")
 def delete_note(id: int,
-                user = Depends(current_user),
+                user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
 
     try:
@@ -235,7 +235,7 @@ def delete_note(id: int,
 
 @router.delete("/admin/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una nota con id especifico")
 def delete_note_admin(id: int,
-                user = Depends(require_admin),
+                user : Users = Depends(require_admin),
                 session : Session = Depends(get_session)):
 
     try:

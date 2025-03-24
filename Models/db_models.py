@@ -27,7 +27,7 @@ class Users(SQLModel, table=True):
     role : Role = Field(default=Role.USER, description="Rol del usuario")
 
     notes : List["Notes"] = Relationship(back_populates="user", cascade_delete=True)
-    session : "Sessions" = Relationship(back_populates="user")
+    session : List["Sessions"] = Relationship(back_populates="user")
 
     def encrypt_password(password : str):
         password = password.encode()
