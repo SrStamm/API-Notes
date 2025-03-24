@@ -1,9 +1,11 @@
+from sqlalchemy import null, true
 from sqlmodel import Field, SQLModel, Relationship
 from datetime import datetime
 from pydantic import EmailStr, field_validator
 from typing import List
 from enum import Enum
 from passlib.context import CryptContext
+from uuid import uuid4
 
 # Contexto de encriptacion 
 crypt = CryptContext(schemes=["bcrypt"])
@@ -47,6 +49,7 @@ class Users(SQLModel, table=True):
 class notes_tags_link(SQLModel, table=True):
     note_id : int | None = Field(default=None, foreign_key="notes.id", primary_key=True)
     tag_id : int | None = Field(default=None, foreign_key="tags.id", primary_key=True)
+
 class Tags(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tag: str = Field(index=True, unique=True)
@@ -79,6 +82,15 @@ class Notes(SQLModel, table=True):
             ]
         }
     }
+
+class Session(SQLModel, table=True):
+    session_id : str = Field(default=lambda:str(uuid4()), primary_key=True)
+    user_id: int = Field(foreign_key="users.user_id", index=True)
+    access_token: str = Field(unique=True)
+    refresh_token: str = Field(unique=True)
+    access_expires: datetime
+    refresh_expires: datetime
+    is_active: bool = Field(default=True, nullable=False, index=True)
 
 class UserCreate(SQLModel):
     username: str

@@ -5,14 +5,16 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from Models.db_models import Users
 from DB.database import Session, select, get_session
+from uuid import uuid4
 
 router = APIRouter(prefix="/login", tags=["Authentication"])
 
 # Definimos el algoritmo
 ALGORITHM = "HS256"
 
-# Definimos la duracion del TOKEN
-ACCESS_TOKEN_DURATION = 60
+# Duracion de los tokens
+ACCESS_TOKEN_DURATION = 15
+REFRESH_TOKEN_DURATION = 7
 
 # Definimos una llave secreta
 SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"
@@ -38,15 +40,15 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     
     # Desencriptando el token
     try:
-        username = jwt.decode(token, SECRET, algorithms=ALGORITHM).get("sub")
-        if username is None:
+        user = jwt.decode(token, SECRET, algorithms=ALGORITHM).get("sub")
+        if user is None:
             raise  exception
 
     except JWTError: 
-        raise exception 
-
+        raise exception
+    
     # Query
-    statement = select(Users).where(Users.username == username)
+    statement = select(Users).where(Users.user_id == user)
     user_found = session.exec(statement).first()
 
     if user_found.disabled is True:
@@ -58,7 +60,9 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
 
 
 @router.post("/")
-async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session = Depends(get_session)):
+async def login(form: OAuth2PasswordRequestForm = Depends(),
+                session : Session = Depends(get_session)):
+    # Busqueda del usuario
     statement = select(Users).where(Users.username == form.username)
     user_found = session.exec(statement).first()
 
@@ -70,17 +74,26 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), session : Session =
     if not crypt.verify(form.password, user_found.password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña incorrecta")
 
-    access_token = {"sub": user_found.username,
-                    "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION)}
+    # Generar los tokens
+    jti = str(uuid4())
+    refresh_token = str(uuid4())
+
+    access_token = {
+        "sub": str(user_found.user_id),
+        "exp": datetime.now() + timedelta(minutes=ACCESS_TOKEN_DURATION),
+        "jit": jti
+}
 
     # Devuelve el token de acceso
     return {"access_token" : jwt.encode(access_token, SECRET, algorithm=ALGORITHM), "token_type" : "bearer"}
+
 
 # Valida si el user esta acivo
 async def current_user(user: Users = Depends(auth_user)):
     if user.disabled is True:
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="Usuario inactivo")
     return user
+
 
 async def require_admin(user = Depends(current_user)):
     if user.role == 'admin':
