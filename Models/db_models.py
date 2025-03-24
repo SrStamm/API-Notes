@@ -1,4 +1,3 @@
-from sqlalchemy import null, true
 from sqlmodel import Field, SQLModel, Relationship
 from datetime import datetime
 from pydantic import EmailStr, field_validator
@@ -28,6 +27,7 @@ class Users(SQLModel, table=True):
     role : Role = Field(default=Role.USER, description="Rol del usuario")
 
     notes : List["Notes"] = Relationship(back_populates="user", cascade_delete=True)
+    session : "Sessions" = Relationship(back_populates="user")
 
     def encrypt_password(password : str):
         password = password.encode()
@@ -49,7 +49,6 @@ class Users(SQLModel, table=True):
 class notes_tags_link(SQLModel, table=True):
     note_id : int | None = Field(default=None, foreign_key="notes.id", primary_key=True)
     tag_id : int | None = Field(default=None, foreign_key="tags.id", primary_key=True)
-
 class Tags(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     tag: str = Field(index=True, unique=True)
@@ -83,7 +82,7 @@ class Notes(SQLModel, table=True):
         }
     }
 
-class Session(SQLModel, table=True):
+class Sessions(SQLModel, table=True):
     session_id : str = Field(default=lambda:str(uuid4()), primary_key=True)
     user_id: int = Field(foreign_key="users.user_id", index=True)
     access_token: str = Field(unique=True)
@@ -91,6 +90,8 @@ class Session(SQLModel, table=True):
     access_expires: datetime
     refresh_expires: datetime
     is_active: bool = Field(default=True, nullable=False, index=True)
+
+    user: "Users" = Relationship(back_populates="session")
 
 class UserCreate(SQLModel):
     username: str
@@ -136,7 +137,7 @@ class NoteRead(SQLModel):
 class NoteReadAdmin(SQLModel):
     id: int
     text : str
-    create_at : datetime
+    create_date : datetime
     category : str
     tags : List[read_tag]
     user_id: int
