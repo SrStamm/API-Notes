@@ -1,3 +1,4 @@
+from re import S
 from sqlmodel import Field, SQLModel, Relationship
 from datetime import datetime
 from pydantic import EmailStr, field_validator
@@ -92,6 +93,11 @@ class Sessions(SQLModel, table=True):
     is_active: bool = Field(default=True, nullable=False, index=True)
 
     user: "Users" = Relationship(back_populates="session")
+
+class read_session(SQLModel):
+    session_id : str
+    user_id : int
+    is_active : bool
 
 class UserCreate(SQLModel):
     username: str
