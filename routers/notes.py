@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
-from Models.db_models import Notes, NoteRead, NoteUpdate, Users, Tags, notes_tags_link, NoteReadAdmin
+from Models.db_models import Notes, NoteRead, NoteUpdate, Users, Tags, notes_tags_link, NoteReadAdmin, shared_notes, read_share_note
 from DB.database import Session, get_session, select
 from routers.auth import current_user, require_admin
 from datetime import datetime
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/notes", tags=["Notes"])
 
 
-@router.get("/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
+@router.get("/personal/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
 def get_notes_user(
                    user : Users = Depends(current_user),
                    session : Session = Depends(get_session),
@@ -73,6 +73,74 @@ def get_notes_user(
         logger.error(f"Error en get_notes_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
+
+@router.get("/shared/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
+def get_shared_notes_user(
+                   user : Users = Depends(current_user),
+                   session : Session = Depends(get_session),
+                   limit : int = Query(10, description="Indica la cantidad de resultados a recibir"),
+                   offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
+                   tags_searched: list[str] = Query(default=None, description='Indica una lista de tags para la busqueda'),
+                   category_searched: str | None = Query(default=None, description='Indica una categoria para la busqueda'),
+                   order_by_category: str | None = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
+                   order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
+                   search_text: str | None = Query(None, description='Busqueda por texto')) -> list[read_share_note]:
+    
+    try:
+        statement = (select(Notes.id, Notes.text, Notes.category, shared_notes.original_user_id)
+                     .join(shared_notes, shared_notes.note_id == Notes.id)
+                     .where(shared_notes.shared_user_id == user.user_id))
+        
+        results = session.exec(statement).all()
+        
+        if results is None:
+            HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ninguna nota compartida")
+
+        # Busqueda por texto
+        if search_text:
+            statement = statement.where(Notes.text.ilike(f"%{search_text}%"))
+        
+        # -- filtrado por tags
+        if tags_searched:
+            for tag in tags_searched:
+                subquery = select(notes_tags_link).join(Tags).where(
+                    Notes.id == notes_tags_link.note_id,
+                    Tags.tag == tag
+                ).exists()
+                statement = statement.where(subquery)
+       
+        # -- filtrado por categoria
+        if category_searched:
+            statement = statement.where(Notes.category == category_searched)
+
+        # -- ordena segun la categoria
+        if order_by_category:
+            if order_by_category.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+            
+            order_func = Notes.category.asc() if order_by_category.upper() == "ASC" else Notes.category.desc()
+            statement = statement.order_by(order_func)
+
+        # -- ordena segun la fecha de creacion, de forma ascendente o descendente
+        if order_by_date:
+            if order_by_date.upper() not in ("ASC", "DESC"):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
+            
+            order_func = Notes.create_at.asc() if order_by_date.upper() == "ASC" else Notes.create_at.desc()
+            statement = statement.order_by(order_func)
+
+        # -- Resultados de la busqueda
+        results = session.exec(statement.limit(limit).offset(offset)).all()
+        
+        if results is None:
+            HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ninguna nota compartida")
+
+        return results
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        logger.error(f"Error en get_shared_notes_user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
 @router.get("/admin/all/",
             description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador",
@@ -169,6 +237,44 @@ def create_notes(note: Notes,
         session.rollback()
         logger.error(f"Error en create_notes: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la nota.")
+    
+@router.post("/{note_id}/shared/{shared_user_id}", status_code=status.HTTP_200_OK, description="Comparte una nota ya creada a otro usuario")
+def share_notes(note_id: int,
+                shared_user_id: int,
+                user : Users = Depends(current_user),
+                session : Session = Depends(get_session)):
+    
+    try:
+        nota = session.get(Notes, note_id)
+        if not nota:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nota no encontrada")
+        
+        share_user = session.get(Users, shared_user_id)
+        if not share_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nota no encontrada")
+
+        statement = (select(Notes)
+                     .join(shared_notes, shared_notes.note_id == Notes.id)
+                     .join(Users, Users.user_id == shared_notes.original_user_id)
+                     .where(Users.user_id == user.user_id, Notes.id == note_id, shared_notes.shared_user_id == shared_user_id))
+        
+        resultado = session.exec(statement).first()
+
+        if resultado:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ya se ha compartido esta nota")
+        
+        nota_compartida = shared_notes(original_user_id=user.user_id, note_id=note_id, shared_user_id=shared_user_id)
+        
+        session.add(nota_compartida)
+        session.commit()
+
+        return {"detail": "Se compartio la nota."}
+    
+    except SQLAlchemyError as e:
+        session.rollback()
+        logger.error(f"Error en create_notes: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la nota.")
+
 
 @router.patch("/{id}", status_code=status.HTTP_202_ACCEPTED,
               description="Permite actualizar una nota con id especifico.")

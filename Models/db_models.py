@@ -1,4 +1,5 @@
 from re import S
+from sqlalchemy import table
 from sqlmodel import Field, SQLModel, Relationship
 from datetime import datetime
 from pydantic import EmailStr, field_validator
@@ -6,6 +7,8 @@ from typing import List
 from enum import Enum
 from passlib.context import CryptContext
 from uuid import uuid4
+
+import sqlmodel
 
 # Contexto de encriptacion 
 crypt = CryptContext(schemes=["bcrypt"])
@@ -28,7 +31,7 @@ class Users(SQLModel, table=True):
     role : Role = Field(default=Role.USER, description="Rol del usuario")
 
     notes : List["Notes"] = Relationship(back_populates="user", cascade_delete=True)
-    session : List["Sessions"] = Relationship(back_populates="user")
+    session : List["Sessions"] = Relationship(back_populates="user", cascade_delete=True)
 
     def encrypt_password(password : str):
         password = password.encode()
@@ -85,7 +88,7 @@ class Notes(SQLModel, table=True):
 
 class Sessions(SQLModel, table=True):
     session_id : str = Field(default=lambda:str(uuid4()), primary_key=True)
-    user_id: int = Field(foreign_key="users.user_id", index=True)
+    user_id: int = Field(foreign_key="users.user_id", index=True, ondelete="CASCADE")
     access_token: str = Field(unique=True)
     refresh_token: str = Field(unique=True)
     access_expires: datetime
@@ -93,6 +96,12 @@ class Sessions(SQLModel, table=True):
     is_active: bool = Field(default=True, nullable=False, index=True)
 
     user: "Users" = Relationship(back_populates="session")
+
+class shared_notes(SQLModel, table=True):
+    original_user_id : int | None = Field(default=None, foreign_key="users.user_id", primary_key=True)
+    note_id : int | None = Field(default=None, foreign_key="notes.id", primary_key=True)
+    shared_user_id : int | None = Field(default=None, foreign_key="users.user_id", primary_key=True)
+
 
 class read_session(SQLModel):
     session_id : str
@@ -152,3 +161,12 @@ class NoteUpdate(SQLModel):
     text: str | None = None
     category: str | None = None
     tags : List[str] | None = None
+
+class read_share_note(SQLModel):
+    id: int
+    text : str
+    category : str
+    original_user_id: int
+    
+class shared(SQLModel):
+    shared_user_id: int

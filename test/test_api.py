@@ -164,19 +164,19 @@ def test_create_many_notes(client, auth_headers):
 
 @pytest.mark.notes_testing
 def test_get_notes_filtered(client, auth_headers):
-    response = client.get('/notes/', headers=auth_headers, params={'limit':2})
+    response = client.get('/notes/personal/', headers=auth_headers, params={'limit':2})
     assert response.status_code == 200
     notes = response.json()
     assert isinstance(notes, list)
     assert len(notes) == 2
 
-    response = client.get('/notes/', headers=auth_headers, params={'category_searched':'work'})
+    response = client.get('/notes/personal/', headers=auth_headers, params={'category_searched':'work'})
     assert response.status_code == 200
     assert response.json() == [{'id': 3, 'text': 'vvlc', 'category': 'work', 'tags': [{'tag': 'cierrenlo'}], 'user_id': 1}]
 
 @pytest.mark.notes_testing
 def test_get_notes(client, auth_headers):
-    response = client.get("/notes/", headers=auth_headers)
+    response = client.get("/notes/personal/", headers=auth_headers)
     assert response.status_code == 200
     notes = response.json()
     assert isinstance(notes, list)
