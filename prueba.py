@@ -3,8 +3,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from routers import notes, users, auth
 from DB.database import create_db_and_tables
-
 import logging
+
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)

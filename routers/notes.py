@@ -1,10 +1,14 @@
 from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
-from Models.db_models import Notes, NoteRead, NoteUpdate, Users, Tags, notes_tags_link, NoteReadAdmin, shared_notes, read_share_note
-from DB.database import Session, get_session, select
+from Models.db_models import (Notes, NoteRead, NoteUpdate,
+                              Users, Tags, notes_tags_link,
+                              NoteReadAdmin, shared_notes, 
+                              read_share_note, NoteUpdateShare, shared_permission)
+from DB.database import Session, get_session, select, red
+from pydantic import Field
 from routers.auth import current_user, require_admin
 from datetime import datetime
-from sqlmodel import func
+import json
 
 import logging
 # Configurar logging
@@ -14,7 +18,27 @@ logger = logging.getLogger(__name__)
 # Router de la app
 router = APIRouter(prefix="/notes", tags=["Notes"])
 
+# Elimina todas las cachés relacionadas con las notas del usuario
+def invalidate_user_notes(user_id: int):
+    try:
+        # Usar SCAN para evitar bloqueos en producción
+        keys = []
+        pattern = f"user_notes:{user_id}:*"
+        for key in red.scan_iter(pattern):
+            keys.append(key)
+        
+        if keys:
+            red.delete(*keys)
+        
+        # Invalidar también notas compartidas
+        shared_pattern = f"shared_notes:*:{user_id}:*"
+        for key in red.scan_iter(shared_pattern):
+            red.delete(key)
+            
+    except red.RedisError as e:
+        logger.error(f"Error invalidando cache: {str(e)}")
 
+# Obtener notas personales
 @router.get("/personal/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
 def get_notes_user(
                    user : Users = Depends(current_user),
@@ -27,7 +51,27 @@ def get_notes_user(
                    order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
                    search_text: str | None = Query(None, description='Busqueda por texto')) -> list[NoteRead]:
     
+    # Generar clave única considerando todos los parámetros
+    params = [
+        user.user_id,
+        limit,
+        offset,
+        ','.join(sorted(tags_searched)) if tags_searched else '',
+        category_searched or '',
+        order_by_category or '',
+        order_by_date or '',
+        search_text or ''
+    ]
+    # Se crea la clave
+    cache_key = f"user_notes:{':'.join(map(str, params))}"
+
     try:
+        # Intenta obtener del cache
+        cached_data = red.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+        
+        # Caso contrario, obtiene los datos
         statement = select(Notes).where(Notes.user_id == user.user_id)
 
         # Busqueda por texto
@@ -42,7 +86,7 @@ def get_notes_user(
                     Tags.tag == tag
                 ).exists()
                 statement = statement.where(subquery)
-       
+    
         # -- filtrado por categoria
         if category_searched:
             statement = statement.where(Notes.category == category_searched)
@@ -65,7 +109,11 @@ def get_notes_user(
 
         # -- Resultados de la busqueda
         results = session.exec(statement.limit(limit).offset(offset)).all()
-        
+
+        # Convertir resultados a Pydantic antes de cachear
+        notes_list = [NoteRead.model_validate(note).model_dump() for note in results]
+        red.setex(cache_key, 60, json.dumps(notes_list))
+
         return results
 
     except SQLAlchemyError as e:
@@ -73,7 +121,7 @@ def get_notes_user(
         logger.error(f"Error en get_notes_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
-
+# Obtener notas compartidas
 @router.get("/shared/", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
 def get_shared_notes_user(
                    user : Users = Depends(current_user),
@@ -84,10 +132,29 @@ def get_shared_notes_user(
                    category_searched: str | None = Query(default=None, description='Indica una categoria para la busqueda'),
                    order_by_category: str | None = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
                    order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
-                   search_text: str | None = Query(None, description='Busqueda por texto')) -> list[read_share_note]:
+                   search_text: str | None = Query(None, description='Busqueda por texto')) -> list[read_share_note] :
     
+    # Generar clave única considerando todos los parámetros
+    params = [
+        user.user_id,
+        limit,
+        offset,
+        ','.join(sorted(tags_searched)) if tags_searched else '',
+        category_searched or '',
+        order_by_category or '',
+        order_by_date or '',
+        search_text or ''
+    ]
+    # Se crea la clave
+    cache_key = f"shared_notes:{':'.join(map(str, params))}"
+
     try:
-        statement = (select(Notes.id, Notes.text, Notes.category, shared_notes.original_user_id)
+        # Intenta obtener del cache
+        cached_data = red.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+        
+        statement = (select(shared_notes.original_user_id, shared_notes.note_id, Notes.text, Notes.category)
                      .join(shared_notes, shared_notes.note_id == Notes.id)
                      .where(shared_notes.shared_user_id == user.user_id))
         
@@ -99,15 +166,6 @@ def get_shared_notes_user(
         # Busqueda por texto
         if search_text:
             statement = statement.where(Notes.text.ilike(f"%{search_text}%"))
-        
-        # -- filtrado por tags
-        if tags_searched:
-            for tag in tags_searched:
-                subquery = select(notes_tags_link).join(Tags).where(
-                    Notes.id == notes_tags_link.note_id,
-                    Tags.tag == tag
-                ).exists()
-                statement = statement.where(subquery)
        
         # -- filtrado por categoria
         if category_searched:
@@ -135,6 +193,10 @@ def get_shared_notes_user(
         if results is None:
             HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ninguna nota compartida")
 
+        # Convertir resultados a Pydantic antes de cachear
+        notes_list = [read_share_note.model_validate(note).model_dump() for note in results]
+        red.setex(cache_key, 60, json.dumps(notes_list))
+
         return results
 
     except SQLAlchemyError as e:
@@ -142,6 +204,7 @@ def get_shared_notes_user(
         logger.error(f"Error en get_shared_notes_user: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
+# Obtener todas las notas de todos los usuarios
 @router.get("/admin/all/",
             description="Obtiene todas las notas de todos los usuarios. Requiere permiso de administrador",
             status_code=status.HTTP_200_OK)
@@ -200,17 +263,29 @@ def get_notes_admin_all(
         logger.error(f"Error en get_notes_all: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
-
+# Obtener una nota de cualquier usuario
 @router.get("/admin/{id}", status_code=status.HTTP_200_OK, response_model=NoteRead, 
             description="Obtiene la nota con id especifico. Requiere permiso de administrador")
 def notes_search_id_admin(id: int,
-                    user: Users = Depends(require_admin),
-                    session : Session = Depends(get_session)) -> NoteReadAdmin:
+                          user: Users = Depends(require_admin),
+                          session : Session = Depends(get_session)) -> NoteReadAdmin:
+    
+    cache_key = f'note:{id}'
     try:
+        # Comprueba si hay dato cacheado
+        cached_data = red.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+        
+        # Caso no tenga, sigue con su trabajo
         result = session.get(Notes, id)
         
-        if result is None:
+        if result:
+            note_data = NoteReadAdmin.model_validate(result).model_dump()
+            red.setex(cache_key, 60,  json.dumps(note_data))
+        else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la nota.")
+
         return result
 
     except SQLAlchemyError as e:
@@ -218,7 +293,7 @@ def notes_search_id_admin(id: int,
         logger.error(f"Error en notes_search_id: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
 
-
+# Crea una nueva nota
 @router.post("/", status_code=status.HTTP_201_CREATED, description="Crea una nueva nota. Necesita tener un 'text' como minimo.")
 def create_notes(note: Notes,
                 user : Users = Depends(current_user),
@@ -237,10 +312,12 @@ def create_notes(note: Notes,
         session.rollback()
         logger.error(f"Error en create_notes: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la nota.")
-    
+
+# Comparte una nota con otro usuario
 @router.post("/{note_id}/shared/{shared_user_id}", status_code=status.HTTP_200_OK, description="Comparte una nota ya creada a otro usuario")
 def share_notes(note_id: int,
                 shared_user_id: int,
+                permission: shared_permission = Query(default=shared_permission.READ),
                 user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
     
@@ -263,7 +340,7 @@ def share_notes(note_id: int,
         if resultado:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ya se ha compartido esta nota")
         
-        nota_compartida = shared_notes(original_user_id=user.user_id, note_id=note_id, shared_user_id=shared_user_id)
+        nota_compartida = shared_notes(original_user_id=user.user_id, note_id=note_id, shared_user_id=shared_user_id, permission=permission)
         
         session.add(nota_compartida)
         session.commit()
@@ -275,7 +352,46 @@ def share_notes(note_id: int,
         logger.error(f"Error en create_notes: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al crear la nota.")
 
+# Obtener notas compartidas
+@router.patch("/shared/{shared_note_id}", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
+def patch_shared_notes_user(shared_note_id: int,
+                            update_note: NoteUpdateShare,
+                            user : Users = Depends(current_user),
+                            session : Session = Depends(get_session)):
+    
+    try:
+        statement = (select(shared_notes)
+                     .where(shared_notes.shared_user_id == user.user_id, shared_notes.note_id == shared_note_id))
+        
+        shared_note_selected = session.exec(statement).first()
+        
+        if not shared_note_selected:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ninguna nota compartida")
 
+        if shared_note_selected.permission == 'read':
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No estas autorizado para modificar esta nota")
+
+        note_selected = session.get(Notes,shared_note_selected.note_id)
+
+        if note_selected is None:
+            HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontro ninguna nota")
+        
+        if update_note.text:
+            note_selected.text = update_note.text
+
+        if update_note.category:
+            note_selected.category = update_note.category
+                
+        session.commit()
+
+        return {"detail":"La nota fue actualizada con exito"}
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        logger.error(f"Error en get_shared_notes_user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al acceder a la base de datos.")
+
+# Modifica una nota
 @router.patch("/{id}", status_code=status.HTTP_202_ACCEPTED,
               description="Permite actualizar una nota con id especifico.")
 def update_note(
@@ -310,6 +426,11 @@ def update_note(
                 note_selected.tags.append(tag_selected_db) # Asocia el Tag (existente o nuevo) a la tarea
 
         session.commit()
+
+        # Invalidar cache
+        invalidate_user_notes(user.user_id)
+        red.delete(f"note:{id}")
+
         return {"detail": "Nota actualizada con éxito"}
     
     except SQLAlchemyError as e:
@@ -317,7 +438,7 @@ def update_note(
         logger.error(f"Error en update_note: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al actualizar la nota.")
 
-
+# Elimina una nota
 @router.delete("/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una nota con id especifico")
 def delete_note(id: int,
                 user : Users = Depends(current_user),
@@ -331,6 +452,11 @@ def delete_note(id: int,
 
         session.delete(result)
         session.commit()
+
+        # Invalidar cache
+        invalidate_user_notes(user.user_id)
+        red.delete(f"note:{id}")
+
         return {"detail": "Nota eliminada exitosamente"}
     
     except SQLAlchemyError as e:
@@ -338,7 +464,7 @@ def delete_note(id: int,
         logger.error(f"Error en delete_note: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Error al eliminar la nota.")
     
-
+# Elimina una nota de cualquier usuario
 @router.delete("/admin/{id}", status_code=status.HTTP_202_ACCEPTED, description="Elimina una nota con id especifico")
 def delete_note_admin(id: int,
                 user : Users = Depends(require_admin),
@@ -352,6 +478,11 @@ def delete_note_admin(id: int,
 
         session.delete(result)
         session.commit()
+
+        # Invalidar cache
+        invalidate_user_notes(result.user_id)
+        red.delete(f"note:{id}")
+
         return {"detail": "Nota eliminada exitosamente"}
     
     except SQLAlchemyError as e:

@@ -24,3 +24,15 @@ def get_session():
 
     finally: 
         session.close()
+
+
+import redis
+
+red = redis.Redis(
+    host='localhost',
+    port=6379,
+    decode_responses=True,
+    socket_connect_timeout=3,
+    retry_on_timeout=True,
+    health_check_interval=30
+)

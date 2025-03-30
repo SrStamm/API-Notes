@@ -22,6 +22,10 @@ class Category(str, Enum):
     STUDY = 'study'
     UNKNOWN = 'unknown'
 
+class shared_permission(str, Enum):
+    READ = 'read'
+    WRITE = 'write'
+
 class Users(SQLModel, table=True):
     user_id: int | None = Field(default=None, primary_key=True, nullable=False, description="Se crea solo")
     username : str = Field(index=True)
@@ -101,6 +105,7 @@ class shared_notes(SQLModel, table=True):
     original_user_id : int | None = Field(default=None, foreign_key="users.user_id", primary_key=True)
     note_id : int | None = Field(default=None, foreign_key="notes.id", primary_key=True)
     shared_user_id : int | None = Field(default=None, foreign_key="users.user_id", primary_key=True)
+    permission: shared_permission = Field(default=shared_permission.READ, description="Indica el permiso que tiene un usuario")
 
 
 class read_session(SQLModel):
@@ -152,7 +157,7 @@ class NoteRead(SQLModel):
 class NoteReadAdmin(SQLModel):
     id: int
     text : str
-    create_date : datetime
+    create_at : datetime
     category : str
     tags : List[read_tag]
     user_id: int
@@ -163,10 +168,14 @@ class NoteUpdate(SQLModel):
     tags : List[str] | None = None
 
 class read_share_note(SQLModel):
-    id: int
+    note_id: int
     text : str
     category : str
     original_user_id: int
+
+class NoteUpdateShare(SQLModel):
+    text: str | None = None
+    category: str | None = None
     
 class shared(SQLModel):
     shared_user_id: int

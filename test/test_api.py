@@ -117,7 +117,7 @@ def test_get_user_by_username(client, auth_headers):
 
 @pytest.mark.users_testing
 def test_failed_get_user_all(client, auth_headers):
-    response = client.get("/users/all-users/", headers=auth_headers, params={"username":"mirko_dev"})
+    response = client.get("/users/all-users/", headers=auth_headers, params={"username":"equivocado"})
     assert response.status_code == 404
     assert response.json() == {"detail":"User no encontrado"}
 
@@ -306,7 +306,7 @@ def test_get_notes_admin(client, auth_headers_admin):
     notes = response.json()
     assert isinstance(notes, list)
     for user in notes:
-        assert all(key in user for key in ["text","id","category", "tags", "user_id", "create_date"])
+        assert all(key in user for key in ["text","id","category", "tags", "user_id", "create_at"])
 
     response = client.get("/notes/admin/all/", headers=auth_headers_admin, params={"limit":2, "order_by_date":"asc"})
     assert response.status_code == 200
