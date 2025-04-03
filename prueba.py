@@ -1,5 +1,6 @@
+from sqlalchemy import true
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from routers import notes, users, auth
 from DB.database import create_db_and_tables
@@ -48,5 +49,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Error interno del servidor"}
     )
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+@app.websocket("/ws")
+async def websocket_endpoint(websocket : WebSocket):
+    await websocket.accept()
+    while true:
+        data = await websocket.receive_text()
+        await websocket.send_text(f'Message text was: {data}')
