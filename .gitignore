@@ -11,5 +11,4 @@ alembic.ini
 ./routers/__pycache__
 ./test/__pycache__
 .dockerignore
-requeriments.txt
 ./htlmcov
