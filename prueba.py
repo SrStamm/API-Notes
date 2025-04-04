@@ -1,8 +1,7 @@
 from sqlalchemy import true
-import uvicorn
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from routers import notes, users, auth
+from routers import notes, users, auth, ws_manager
 from DB.database import create_db_and_tables
 import logging
 
@@ -19,7 +18,7 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En desarrollo puedes usar "*"
+    allow_origins=["*"],  # En desarrollo puedes usar "*", en produccion debe de personalizarse
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +35,7 @@ except:
 app.include_router(notes.router)
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(ws_manager.router)
 
 # Base
 @app.get("/", include_in_schema=False, status_code=200)
@@ -49,9 +49,29 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Error interno del servidor"}
     )
 
+"""
 @app.websocket("/ws")
 async def websocket_endpoint(websocket : WebSocket):
     await websocket.accept()
-    while true:
+    while True:
         data = await websocket.receive_text()
         await websocket.send_text(f'Message text was: {data}')
+        await websocket.receive_text()
+"""
+
+
+"""from Models.ws import ConnectionManager
+manager = ConnectionManager()
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(websocket, user_id)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.send_personal_message(f"Received:{data}", websocket)
+    
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        await manager.send_personal_message("Bye!!!",websocket)"""

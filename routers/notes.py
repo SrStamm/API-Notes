@@ -2,15 +2,16 @@ from fastapi import APIRouter, status, HTTPException, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
 from Models.db_models import (Notes, NoteRead, NoteUpdate,
                               Users, Tags, notes_tags_link,
-                              NoteReadAdmin, shared_notes, 
+                              NoteReadAdmin, shared_notes,
                               read_share_note, NoteUpdateShare, shared_permission)
+from Models.ws import manager
 from DB.database import Session, get_session, select, red
-from pydantic import Field
 from routers.auth import current_user, require_admin
 from datetime import datetime
 import json
-
 import logging
+
+
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -315,7 +316,7 @@ def create_notes(note: Notes,
 
 # Comparte una nota con otro usuario
 @router.post("/{note_id}/shared/{shared_user_id}", status_code=status.HTTP_200_OK, description="Comparte una nota ya creada a otro usuario")
-def share_notes(note_id: int,
+async def share_notes(note_id: int,
                 shared_user_id: int,
                 permission: shared_permission = Query(default=shared_permission.READ),
                 user : Users = Depends(current_user),
@@ -323,6 +324,7 @@ def share_notes(note_id: int,
     
     try:
         nota = session.get(Notes, note_id)
+
         if not nota:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nota no encontrada")
         
@@ -344,6 +346,14 @@ def share_notes(note_id: int,
         
         session.add(nota_compartida)
         session.commit()
+        
+        # Enviar notificación
+        notification = {
+            "type": "note_shared",
+            "message": f"Se ha compartido una nota contigo (ID: {note_id})",
+            "note_id": note_id
+        }
+        await manager.send_personal_message(json.dumps(notification), shared_user_id)
 
         return {"detail": "Se compartio la nota."}
     
