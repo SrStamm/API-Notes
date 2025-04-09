@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/mirko/Documentos/Backend/API-Notes/env
+set -gx VIRTUAL_ENV /home/mirko/Documentos/backend/API-Notes/env
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

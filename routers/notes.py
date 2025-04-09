@@ -307,6 +307,11 @@ def create_notes(note: Notes,
         
         session.add(note)
         session.commit()
+
+        # Invalidar cache
+        invalidate_user_notes(user.user_id)
+        red.delete(f"note:{id}")
+        
         return {"detail": "Se creó una nueva nota."}
     
     except SQLAlchemyError as e:
@@ -364,7 +369,7 @@ async def share_notes(note_id: int,
 
 # Obtener notas compartidas
 @router.patch("/shared/{shared_note_id}", status_code=status.HTTP_200_OK, description="Obtiene todas las notas del usuario. OBLIGATORIO: text")
-def patch_shared_notes_user(shared_note_id: int,
+async def patch_shared_notes_user(shared_note_id: int,
                             update_note: NoteUpdateShare,
                             user : Users = Depends(current_user),
                             session : Session = Depends(get_session)):
@@ -394,6 +399,15 @@ def patch_shared_notes_user(shared_note_id: int,
                 
         session.commit()
 
+        # Enviar notificación
+        notification = {
+            "type": "note_shared",
+            "message": f"Se ha modificado una nota que compartiste (ID: {shared_note_id})",
+            "note_id": shared_note_id
+        }
+
+        await manager.send_personal_message(json.dumps(notification), shared_note_selected.original_user_id)
+
         return {"detail":"La nota fue actualizada con exito"}
 
     except SQLAlchemyError as e:
@@ -404,7 +418,7 @@ def patch_shared_notes_user(shared_note_id: int,
 # Modifica una nota
 @router.patch("/{id}", status_code=status.HTTP_202_ACCEPTED,
               description="Permite actualizar una nota con id especifico.")
-def update_note(
+async def update_note(
                 id: int,
                 note: NoteUpdate,
                 user : Users = Depends(current_user),
@@ -440,6 +454,27 @@ def update_note(
         # Invalidar cache
         invalidate_user_notes(user.user_id)
         red.delete(f"note:{id}")
+
+        # Busca si esta nota fue compartida, y la actualiza
+        statement = (select(shared_notes)
+                     .where(shared_notes.original_user_id == user.user_id, shared_notes.note_id == note_selected.id))
+        
+        shared_note_selected = session.exec(statement).first()
+        
+        if shared_note_selected:
+            shared_user = shared_note_selected.shared_user_id
+            session.delete(shared_note_selected)
+            session.add(shared_notes(user.user_id, note_selected.id, shared_user))
+            session.commit()
+
+            # Enviar notificación
+            notification = {
+                "type": "note_shared",
+                "message": f"Se ha modificado una nota compartida (ID: {note_selected.id})",
+                "note_id": note_selected.id
+            }
+
+            await manager.send_personal_message(json.dumps(notification), shared_user)
 
         return {"detail": "Nota actualizada con éxito"}
     
