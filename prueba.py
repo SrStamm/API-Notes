@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from routers import notes, users, auth, ws_manager
 from DB.database import create_db_and_tables
 import logging
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
@@ -15,30 +17,23 @@ app = FastAPI(
     description="Esta API realiza un CRUD sobre notas y usuarios, con autenticacion y donde cada usuario puede tener sus propias notas"
 )
 
-from fastapi.middleware.cors import CORSMiddleware
-# Configuración CORS más flexible para desarrollo
-origins = [
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000"
-]
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        create_db_and_tables()
+        print("Base de Datos y tablas creadas con exito")
+    except:
+        print({"error":"No se pudo conectar con la base de datos"})
+
+allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos los métodos
-    allow_headers=["*"],  # Permite todos los headers
-    expose_headers=["*"]  # Expone todos los headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-try:
-    # Inicializa la base de datos
-    create_db_and_tables()
-    print("Base de Datos y tablas creadas con exito")
-except:
-    print({"error":"No se pudo conectar con la base de datos"})
 
 # Routers
 app.include_router(notes.router)

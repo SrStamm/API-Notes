@@ -1,13 +1,27 @@
 from sqlmodel import Session, SQLModel, create_engine, select, or_
 from Models.db_models import Users, Notes, Sessions
+import os
 
-postgres_url = "postgresql://postgres:lubu19$@postgres:5432/mydatabase"
+# postgres_url = "postgresql://postgres:123456@postgres:5432/mydatabase"
+postgres_url = os.getenv("DATABASE_URL")
 engine = create_engine(postgres_url, echo=True, pool_pre_ping=True)
 
+if not postgres_url:
+    raise ValueError("DATABASE_URL no está definida en el entorno")
+
+from alembic import context
+config = context.configure
+
 def create_db_and_tables():
-#    SQLModel.metadata.create_all(engine)
+    SQLModel.metadata.create_all(engine)
     try:
         with engine.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=SQLModel.metadata
+            )
+            with context.begin_transaction():
+                context.run_migrations()
             result = connection.execute("SELECT 1")
             print(f"Connected to PostgreSQL: {result.fetchone()}")
     except Exception as e:
@@ -26,10 +40,12 @@ def get_session():
         session.close()
 
 
+
+
 import redis
 
 red = redis.Redis(
-    host='localhost',
+    host='redis',
     port=6379,
     decode_responses=True,
     socket_connect_timeout=3,
