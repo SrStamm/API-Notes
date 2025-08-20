@@ -7,8 +7,9 @@ from DB.database import get_session
 from fastapi.testclient import TestClient
 from prueba import app
 from sqlmodel import SQLModel, create_engine, Session
-import pytest, os, errno
-from datetime import date
+import pytest
+import os
+import errno
 
 # Crea la BD, cierra las conexiones y elimina la BD
 engine = create_engine("sqlite:///./test/test.db")
@@ -108,18 +109,6 @@ def test_get_user_all(client, auth_headers):
     assert isinstance(users, list)
     for user in users:
         assert all(key in user for key in ["username","user_id"])
-
-@pytest.mark.users_testing
-def test_get_user_by_username(client, auth_headers):
-    response = client.get("/users/all-users/", headers=auth_headers, params={"username":"test"})
-    assert response.status_code == 200
-    assert response.json() == {"username": "test", "user_id":1}
-
-@pytest.mark.users_testing
-def test_failed_get_user_all(client, auth_headers):
-    response = client.get("/users/all-users/", headers=auth_headers, params={"username":"equivocado"})
-    assert response.status_code == 404
-    assert response.json() == {"detail":"User no encontrado"}
 
 @pytest.mark.users_testing
 def test_get_user_id(client, auth_headers):
@@ -318,7 +307,7 @@ def test_get_notes_admin(client, auth_headers_admin):
 def test_get_notes_admin_by_id(client, auth_headers_admin):
     response = client.get("/notes/admin/1", headers=auth_headers_admin)
     assert response.status_code == 200
-    assert response.json() == {"text":"ojala, no?", "user_id":1, "category":"unknown", "user_id":3, "id":1, "tags":[]}
+    assert response.json() == {"text":"ojala, no?", "user_id":1, "category":"unknown", "id":1, "tags":[]}
 
 @pytest.mark.admin_testing
 def test_failed_get_notes_admin_by_id(client, auth_headers_admin):

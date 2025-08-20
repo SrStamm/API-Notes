@@ -1,7 +1,6 @@
-from sqlalchemy import true
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from routers import notes, users, auth, ws_manager
+from routers import notes, users, auth
 from DB.database import create_db_and_tables
 import logging
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +38,6 @@ app.add_middleware(
 app.include_router(notes.router)
 app.include_router(users.router)
 app.include_router(auth.router)
-app.include_router(ws_manager.router)
 
 # Base
 @app.get("/", include_in_schema=False, status_code=200)

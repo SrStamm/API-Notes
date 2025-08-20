@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  test_runner:
+    build: .
+    command: pytest -vv
+    environment:
+      - DATABASE_URL=postgresql://testing:654321@testing_db:5432/testing
+      - HOST_REDIS=redis
+      - PORT_REDIS=6379
+    depends_on:
+      - testing_db
+      - redis
+
+  testing_db:
+    image: postgres:latest
+    container_name: testing
+    environment:
+      - POSTGRES_USER=testing
+      - POSTGRES_PASSWORD=654321
+      - POSTGRES_DB=testing
+    ports:
+      - "5430:5432"
+
+  redis:
+    image: redis/redis-stack
+    ports:
+      - "6379:6379"

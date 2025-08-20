@@ -3,7 +3,8 @@ from Models.db_models import Users, UserRead, UserUpdate, UserReadAdmin, UserCre
 from DB.database import Session, select, get_session, or_, red
 from sqlalchemy.exc import SQLAlchemyError
 from routers.auth import current_user, require_admin, encrypt_password
-import logging, json
+import logging
+import json
 
 # Configurar logging
 logging.basicConfig(level=logging.ERROR)
@@ -13,14 +14,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # Todos los usuarios disponibles
-@router.get("/all-users/", status_code=status.HTTP_200_OK,
-            description="Obtiene una lista de todos los usuarios, con 'limit' y 'offset' para paginar.")
+@router.get(
+    "/all-users/",
+    status_code=status.HTTP_200_OK,
+    description="Obtiene una lista de todos los usuarios, con 'limit' y 'offset' para paginar.")
+def read_all_users(
+    limit : int = Query(5, description='Indica la cantidad de resultados a recibir'),
+    offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
+    username : str = Query(None, description='Indica un username para la busqueda'),
+    session : Session = Depends(get_session)) -> list[UserRead] | UserRead:
 
-def read_all_users(limit : int = Query(5, description='Indica la cantidad de resultados a recibir'),
-                   offset: int = Query(0, description='Indica la cantidad que se van a saltear'),
-                   username : str = Query(None, description='Indica un username para la busqueda'),
-                   session : Session = Depends(get_session)) -> list[UserRead] | UserRead:
-    
     # Generar clave única considerando todos los parámetros
     params = [limit, offset]
 
@@ -32,14 +35,14 @@ def read_all_users(limit : int = Query(5, description='Indica la cantidad de res
 
         if cached_data:
             return json.loads(cached_data)
-        
+
         statement = select(Users)
 
         if username:
             user_found = session.exec(statement.where(Users.username == username)).first()
             if not user_found:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User no encontrado")
-            
+
             result = UserRead.model_validate(user_found).model_dump()
             red.setex(cache_key, 60, json.dumps(result))
         else:
@@ -48,7 +51,7 @@ def read_all_users(limit : int = Query(5, description='Indica la cantidad de res
             result = [UserRead.model_validate(user).model_dump() for user in user_found]
             red.setex(cache_key, 60, json.dumps(result))
         return user_found
-    
+
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Error en read_all_users: {str(e)}")
@@ -71,9 +74,9 @@ def read_users_with_id(id: int = Path(ge=0),
 
         if results is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
-        
+
         return results
-    
+
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Error en read_users_with_id: {str(e)}")
@@ -90,7 +93,6 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
         if user_found is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se ha encontrado el usario")
         return user_found
-    
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Error en read_users_with_id_for_admin: {str(e)}")
@@ -100,10 +102,10 @@ def read_users_with_id_for_admin(id: int = Path(ge=0), session : Session = Depen
 @router.post("/", status_code=status.HTTP_202_ACCEPTED,
              description="Crea un nuevo usuario. OBLIGATORIO: username, email y password")
 def create_user(new_user : UserCreate, session : Session = Depends(get_session)):
-    
+
     try:
         results = session.exec(select(Users).where(or_(Users.username == new_user.username, Users.email == new_user.email))).first()
-        
+
         if results:
             if results.username == new_user.username:
                 raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE,

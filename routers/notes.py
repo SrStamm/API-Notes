@@ -4,8 +4,7 @@ from Models.db_models import (Notes, NoteRead, NoteUpdate,
                               Users, Tags, notes_tags_link,
                               NoteReadAdmin, shared_notes,
                               read_share_note, NoteUpdateShare, shared_permission)
-from Models.ws import manager
-from DB.database import Session, get_session, select, red
+from DB.database import Session, get_session, select, red, RedisError
 from routers.auth import current_user, require_admin
 from datetime import datetime
 import json
@@ -27,16 +26,16 @@ def invalidate_user_notes(user_id: int):
         pattern = f"user_notes:{user_id}:*"
         for key in red.scan_iter(pattern):
             keys.append(key)
-        
+
         if keys:
             red.delete(*keys)
-        
+
         # Invalidar también notas compartidas
         shared_pattern = f"shared_notes:*:{user_id}:*"
         for key in red.scan_iter(shared_pattern):
             red.delete(key)
-            
-    except red.RedisError as e:
+
+    except RedisError as e:
         logger.error(f"Error invalidando cache: {str(e)}")
 
 # Obtener notas personales
@@ -51,7 +50,7 @@ def get_notes_user(
                    order_by_category: str | None = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
                    order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
                    search_text: str | None = Query(None, description='Busqueda por texto')) -> list[NoteRead]:
-    
+
     # Generar clave única considerando todos los parámetros
     params = [
         user.user_id,
@@ -71,14 +70,14 @@ def get_notes_user(
         cached_data = red.get(cache_key)
         if cached_data:
             return json.loads(cached_data)
-        
+
         # Caso contrario, obtiene los datos
         statement = select(Notes).where(Notes.user_id == user.user_id)
 
         # Busqueda por texto
         if search_text:
             statement = statement.where(Notes.text.ilike(f"%{search_text}%"))
-        
+
         # -- filtrado por tags
         if tags_searched:
             for tag in tags_searched:
@@ -87,7 +86,7 @@ def get_notes_user(
                     Tags.tag == tag
                 ).exists()
                 statement = statement.where(subquery)
-    
+
         # -- filtrado por categoria
         if category_searched:
             statement = statement.where(Notes.category == category_searched)
@@ -96,7 +95,7 @@ def get_notes_user(
         if order_by_category:
             if order_by_category.upper() not in ("ASC", "DESC"):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
-            
+
             order_func = Notes.category.asc() if order_by_category.upper() == "ASC" else Notes.category.desc()
             statement = statement.order_by(order_func)
 
@@ -104,7 +103,7 @@ def get_notes_user(
         if order_by_date:
             if order_by_date.upper() not in ("ASC", "DESC"):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Parametro incorrecto"})
-            
+
             order_func = Notes.create_at.asc() if order_by_date.upper() == "ASC" else Notes.create_at.desc()
             statement = statement.order_by(order_func)
 
@@ -134,7 +133,7 @@ def get_shared_notes_user(
                    order_by_category: str | None = Query(None, description='Indica si se quiere ordenar por categoria de forma ascendete (ASC) o descendente (DESC)'),
                    order_by_date: str | None = Query(None, description='Indica si se quiere ordenar por fecha de forma ascendente (ASC) o descendente (DESC)'),
                    search_text: str | None = Query(None, description='Busqueda por texto')) -> list[read_share_note] :
-    
+
     # Generar clave única considerando todos los parámetros
     params = [
         user.user_id,
@@ -154,13 +153,13 @@ def get_shared_notes_user(
         cached_data = red.get(cache_key)
         if cached_data:
             return json.loads(cached_data)
-        
+
         statement = (select(shared_notes.original_user_id, shared_notes.note_id, Notes.text, Notes.category)
                      .join(shared_notes, shared_notes.note_id == Notes.id)
                      .where(shared_notes.shared_user_id == user.user_id))
-        
+
         results = session.exec(statement).all()
-        
+
         if results is None:
             HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ninguna nota compartida")
 
@@ -299,21 +298,21 @@ def notes_search_id_admin(id: int,
 def create_notes(note: Notes,
                 user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
-    
+
     try:
         note = Notes(**note.model_dump(),
                      user=user,
                      create_at = datetime.now())
-        
+
         session.add(note)
         session.commit()
 
         # Invalidar cache
         invalidate_user_notes(user.user_id)
         red.delete(f"note:{id}")
-        
+
         return {"detail": "Se creó una nueva nota."}
-    
+
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Error en create_notes: {str(e)}")
@@ -351,14 +350,6 @@ async def share_notes(note_id: int,
         
         session.add(nota_compartida)
         session.commit()
-        
-        # Enviar notificación
-        notification = {
-            "type": "note_shared",
-            "message": f"Se ha compartido una nota contigo (ID: {note_id})",
-            "note_id": note_id
-        }
-        await manager.send_personal_message(json.dumps(notification), shared_user_id)
 
         return {"detail": "Se compartio la nota."}
     
@@ -399,15 +390,6 @@ async def patch_shared_notes_user(shared_note_id: int,
                 
         session.commit()
 
-        # Enviar notificación
-        notification = {
-            "type": "note_shared",
-            "message": f"Se ha modificado una nota que compartiste (ID: {shared_note_id})",
-            "note_id": shared_note_id
-        }
-
-        await manager.send_personal_message(json.dumps(notification), shared_note_selected.original_user_id)
-
         return {"detail":"La nota fue actualizada con exito"}
 
     except SQLAlchemyError as e:
@@ -423,20 +405,20 @@ async def update_note(
                 note: NoteUpdate,
                 user : Users = Depends(current_user),
                 session : Session = Depends(get_session)):
-    
+
     try:
         statement = select(Notes).where(Notes.id == id, Notes.user_id == user.user_id)
         note_selected = session.exec(statement).first()
 
         if note_selected is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la nota.")
-        
+
         if note.text:
             note_selected.text = note.text
 
         if note.category:
             note_selected.category = note.category
-        
+
         if note.tags: # Procesa los tags solo si se proporciona una lista en note.tags
             note_selected.tags.clear()
             for tag_name in note.tags:
@@ -458,26 +440,17 @@ async def update_note(
         # Busca si esta nota fue compartida, y la actualiza
         statement = (select(shared_notes)
                      .where(shared_notes.original_user_id == user.user_id, shared_notes.note_id == note_selected.id))
-        
+
         shared_note_selected = session.exec(statement).first()
-        
+
         if shared_note_selected:
             shared_user = shared_note_selected.shared_user_id
             session.delete(shared_note_selected)
             session.add(shared_notes(user.user_id, note_selected.id, shared_user))
             session.commit()
 
-            # Enviar notificación
-            notification = {
-                "type": "note_shared",
-                "message": f"Se ha modificado una nota compartida (ID: {note_selected.id})",
-                "note_id": note_selected.id
-            }
-
-            await manager.send_personal_message(json.dumps(notification), shared_user)
-
         return {"detail": "Nota actualizada con éxito"}
-    
+
     except SQLAlchemyError as e:
         session.rollback()
         logger.error(f"Error en update_note: {str(e)}")
