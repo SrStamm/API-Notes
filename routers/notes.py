@@ -446,10 +446,17 @@ async def update_note(
         if shared_note_selected:
             shared_user = shared_note_selected.shared_user_id
             session.delete(shared_note_selected)
-            session.add(shared_notes(user.user_id, note_selected.id, shared_user))
+            session.add(
+                shared_notes(
+                    original_user_id=user.user_id,
+                    note_id=note_selected.id,
+                    shared_user_id=shared_user)
+            )
             session.commit()
 
-        return {"detail": "Nota actualizada con éxito"}
+        session.refresh(note_selected)
+
+        return {"detail": "Nota actualizada con éxito", "updated_note": note_selected}
 
     except SQLAlchemyError as e:
         session.rollback()
