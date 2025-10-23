@@ -306,12 +306,13 @@ def create_notes(note: Notes,
 
         session.add(note)
         session.commit()
+        session.refresh(note)
 
         # Invalidar cache
         invalidate_user_notes(user.user_id)
         red.delete(f"note:{id}")
 
-        return {"detail": "Se creó una nueva nota."}
+        return {"detail": "Se creó una nueva nota", "new_note": note}
 
     except SQLAlchemyError as e:
         session.rollback()

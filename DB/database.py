@@ -3,7 +3,8 @@ from Models.db_models import Users, Notes, Sessions
 import os
 from dotenv import load_dotenv
 from alembic import context
-from redis import Redis, RedisError
+import redis
+from redis import RedisError
 
 load_dotenv()
 
@@ -43,10 +44,10 @@ def get_session():
     finally: 
         session.close()
 
+REDIS_URL = os.environ.get('REDIS_URL', "redis://localhost:6379")
 
-red = Redis(
-    host=os.environ.get('HOST_REDIS'),
-    port=os.environ.get('PORT_REDIS'),
+red = redis.from_url(
+    REDIS_URL,
     decode_responses=True,
     socket_connect_timeout=3,
     retry_on_timeout=True,
